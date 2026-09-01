@@ -1277,6 +1277,34 @@ localizados e **não** lidos) e montar/assinar uma DPS localmente — o certific
 está cifrado no banco. Mas isso é preparação, **não** é prova: *"o XSD não é o contrato da SEFAZ"*
 (no B9 a nota passou no schema e voltou `cStat 1010`).
 
+
+### 79. 🟢 `docs/TELAS.md` diverge de si mesmo e do banco na contagem de telas
+Achado ao reauditar a documentação em 2026-08-31 (segunda passada, a pedido dele).
+
+Três números para a mesma coisa, medidos no mesmo dia:
+
+| Fonte | Diz |
+|---|---|
+| `docs/TELAS.md`, linha 10 | **58 telas do ERP** |
+| `docs/TELAS.md`, linha 192 | **57 telas em uso** |
+| `SELECT count(*) FROM cfg_tela` | **60** |
+| `menu.ts` com rota, menos os 6 `EmBreve` | **59** |
+
+⚠️ **Não "corrigi" escolhendo um número** — seria trocar uma imprecisão por outra. O `CLAUDE.md`
+passou a citar o **`cfg_tela` = 60** por ser o único **verificável por comando**, e a apontar esta
+divergência. O conserto de verdade é reconciliar as bases: o que `TELAS.md` conta (tela em uso?
+tela-filha? pública?) precisa ser declarado e derivado, não digitado.
+
+⭐ É exatamente a família de [[feedback_catalogo_de_telas_medido_pelo_codigo]]: catálogo que espelha
+o código diverge no dia em que ninguém compara. O `AcoesPorTelaConferemTest` já faz isso para as
+**ações** de cada tela; falta o equivalente para a **contagem**.
+
+⭐ **E a causa está escrita no próprio arquivo, linha 3:** *"Gerado a partir de `web/src/lib/menu.ts`
++ `web/src/App.tsx` em **2026-08-25**; as telas de entrada foram acrescentadas em 2026-08-27 (…) e
+Ordens de Serviço em 2026-08-28."* Ou seja: foi **gerado uma vez** e vem recebendo **acréscimos à
+mão** desde então. Documento gerado que passa a ser editado manualmente perde a única garantia que
+tinha — e é por isso que ele agora discorda de si mesmo em duas linhas. O conserto é **regerá-lo**,
+não somar mais um item.
 ---
 
 ## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-08-31)
@@ -1307,6 +1335,8 @@ está cifrado no banco. Mas isso é preparação, **não** é prova: *"o XSD nã
 - **54** — agenda da OS (depende de decisões suas) e executor por linha.
 - **71** — número fiscal queimado sem registro entre reservar e gravar.
 - **29** — tela de contratação com escolha de grupo.
+- **79** — `docs/TELAS.md` diverge de si mesmo e do banco na contagem de telas (achado na segunda
+  passada de revisão; o `CLAUDE.md` já cita o número verificável).
 - **40** — teto de tentativas no login do backoffice.
 - Da lista que ele aprovou com *"siga"*, ainda **não** feitos: **concorrência real** (nenhum
   `FOR UPDATE` foi exercitado com duas transações), **contrato TS↔Java por endpoint**,

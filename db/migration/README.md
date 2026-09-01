@@ -67,7 +67,7 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V032** | **Entrada por planilha + plano de contas da compra** (2026-08-11): `cfg_geral.id_plano_contas_compra_mercadoria` (conta de CUSTO usada nas contas a pagar geradas pela entrada — não a conta do fornecedor) + seed da árvore mínima do plano de contas | ✅ |
 | **V033** | **`usuario_horario_acesso`** (2026-08-11, `docs/telas/usuario.md`): janela de acesso por dia da semana (1=segunda..7=domingo), com `usuario.controla_horario_acesso` ligando a regra. RLS próprio no arquivo | ✅ |
 
-### V034–V102 — índice (2026-08-16 a 2026-08-31)
+### V034–V106 — índice (2026-08-16 a 2026-08-31)
 
 > ⚠️ **Este índice estava parado na V035** e foi reconstruído em 2026-08-31 a partir dos próprios
 > arquivos (cabeçalho de cada `.sql`) e das datas reais do `git log --diff-filter=A` — nunca da
@@ -139,6 +139,10 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V100** | 08-31 | bloco fiscal em `produto_servico` (`codigo_tributacao_nacional`, alíquota de ISS, retenção). ⭐ **Sem `local_incidencia`**: passou a ser **derivado** por JOIN da V099 — o lojista não responde e não há duas verdades | ✅ |
 | **V101** | 08-31 | `fiscal_config_nfse` (por empresa, com RLS) + `cfg_municipio_nfse` (global, **nasce vazia** de propósito: semear exigiria inventar prazo de cancelamento municipal). ⚠️ `niner_app` tem INSERT/UPDATE nela — quem descobre o convênio é a aplicação | ✅ |
 | **V102** | 08-31 | **documento fiscal de serviço**: `nfse_documento`, `_item`, `_evento`, `nfse_numeracao`. ⭐ A DPS **não tem itens**, então é **uma NFS-e por código de serviço** — o que quebra aqui a invariante "uma nota por venda" da V082 | ✅ |
+| **V103** | 08-31 | as **duas telas da NFS-e** no catálogo do RBAC (`fiscal.nfse-configuracao` e `fiscal.nfse`). ⚠️ Colidiu com a minha V103 de relatório de OS no mesmo dia — a dele já estava no remoto, a minha virou V104 | ✅ |
+| **V104** | 08-31 | **Relatório de Ordens de Serviço** no catálogo de telas (`relatorio-ordens-servico`, Relatórios › Faturamento, `moduloServicos`). Três ações `false`: é tela de leitura, e o `AcoesPorTelaConferemTest` deriva a exigência das anotações do controller | ✅ |
+| **V105** | 08-31 | ⛔ **CSC por AMBIENTE**. Havia UM par `csc_id`/`csc_token` por empresa com `ambiente` num campo à parte: virar a chave no go-live manteria o CSC de homologação e rejeitaria **toda** NFC-e com `cStat 464`. Backfill só para o ambiente em que a empresa está — copiar para os dois inventaria uma credencial que ninguém cadastrou. Colunas antigas mantidas como fallback de leitura | ✅ |
+| **V106** | 08-31 | ⛔ **NUMERAÇÃO por AMBIENTE**, nos três documentos (`fiscal_numeracao`, `nfse_numeracao` e a UNIQUE de `nfse_documento`). Homologação e produção são bases **separadas** na SEFAZ, cada uma começando do 1 — sem isto **cada nota de teste queimava um número de produção** (medido: a NFC-e de homologação estava no 58, então a primeira real sairia com 59). ⚠️ Altera **chave primária** de tabela com dado; backfill com `NO FORCE ROW LEVEL SECURITY` e conferido no banco depois | ✅ |
 
 > ⚠️ **Cinco backfills deste índice saíram VAZIOS em silêncio** (V057, V089, V096, V055/V098) pelo
 > mesmo motivo: migration roda como `niner_owner` e o `FORCE ROW LEVEL SECURITY` (V024) vale até
