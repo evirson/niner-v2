@@ -365,7 +365,12 @@ public class VendaFiscalAssembler {
         //
         // ⚠️ E as quebras que aparecem no DANFE do outro sistema NÃO estão no XML: quem quebra é a
         // largura do campo no papel. Texto de uma linha só é o que o leiaute permite.
-        return String.join(" ", linhas);
+        //
+        // ⚠️ O separador é " | " e não " ": com espaço simples, uma observação que não termina em
+        // pontuação colava na frase seguinte — medido no XML da nota 30, que saiu
+        // "OBS.: bla bla bla bla Valor aproximado dos tributos: R$ 128,73". A barra é ASCII
+        // imprimível (0x7C), dentro da faixa que o XSD aceita.
+        return String.join(" | ", linhas);
     }
 
     private static BigDecimal nzero(BigDecimal v) {

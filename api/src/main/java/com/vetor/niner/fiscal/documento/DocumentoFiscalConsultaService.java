@@ -180,7 +180,13 @@ public class DocumentoFiscalConsultaService {
                                c.telefone AS dest_fone,
                                (SELECT r.chave_referenciada FROM documento_fiscal_referencia r
                                  WHERE r.id_tenant = d.id_tenant AND r.id_documento_fiscal = d.id_documento_fiscal
-                                 LIMIT 1) AS chave_referenciada
+                                 LIMIT 1) AS chave_referenciada,
+                               -- ⭐ INFORMAÇÕES COMPLEMENTARES vêm do XML ASSINADO, não de uma
+                               -- coluna (2026-09-01). O DANFE tem de mostrar o que a SEFAZ TEM;
+                               -- uma coluna espelho poderia divergir do XML, que é exatamente o
+                               -- risco que a decisão de digitar a observação ANTES de emitir
+                               -- existe para evitar. O XML é a fonte, o DANFE é o retrato dele.
+                               substring(d.xml_assinado from '<infCpl>(.*?)</infCpl>') AS inf_cpl
                           FROM documento_fiscal d
                           JOIN empresa e ON e.id_empresa = d.id_empresa AND e.id_tenant = d.id_tenant
                           LEFT JOIN cliente c ON c.id_cliente = d.id_cliente AND c.id_tenant = d.id_tenant
@@ -234,10 +240,43 @@ public class DocumentoFiscalConsultaService {
                 new DanfeTotais(cab.valorProdutos, cab.valorIcms, BigDecimal.ZERO, cab.valorIcmsSt,
                         cab.valorProdutos, cab.valorFrete, cab.valorSeguro, cab.valorDesconto,
                         cab.valorOutros, cab.valorPis, cab.valorCofins, cab.valorTotalTributos, cab.valorTotal),
-                cab.chaveReferenciada != null
-                        ? "Devolucao referente a nota fiscal " + cab.chaveReferenciada
-                        : null,
+                informacoesComplementares(cab),
                 cab.chaveReferenciada);
+    }
+
+    /**
+     * O que sai em INFORMAÇÕES COMPLEMENTARES do DANFE.
+     *
+     * <h2>⛔ O defeito que isto conserta, e ele foi meu</h2>
+     * Em 2026-09-01 o {@code infCpl} passou a ser montado pelo {@code VendaFiscalAssembler}
+     * (contrato, forma de pagamento, vendedor, tributos aproximados e a observação do operador) e
+     * a gravar no XML — <b>e eu não liguei a leitura</b>. Este campo continuava preenchido apenas
+     * com o texto de devolução, então o DANFE mostrava um travessão e o dono do produto reportou
+     * três coisas que eram <b>uma só</b>: a observação não saía, os tributos não saíam e o número
+     * da venda não saía. Medido no banco: os três estavam no XML o tempo todo.
+     *
+     * <p>É a família de {@code feedback_corrigir_uma_ponta_sem_varrer_as_outras} — mudei como o
+     * dado é produzido e não procurei quem o lê.
+     *
+     * <p>⚠️ <b>Fallback só para nota ANTIGA.</b> Documento emitido antes desta data não tem
+     * {@code infCpl} no XML; para a devolução, o texto derivado da chave referenciada continua
+     * sendo melhor que nada. Nota nova sempre cai no primeiro ramo.
+     *
+     * <p>⚠️ O XML guarda o texto <b>escapado</b> ({@code &amp;} para "&"). Devolver assim faria o
+     * DANFE imprimir a entidade literal, que é o tipo de defeito que só aparece quando alguém
+     * digita "&" na observação.
+     */
+    private static String informacoesComplementares(LinhaDanfe cab) {
+        if (cab.infCpl != null && !cab.infCpl.isBlank()) {
+            return cab.infCpl
+                    .replace("&lt;", "<").replace("&gt;", ">")
+                    .replace("&quot;", "\"").replace("&apos;", "'")
+                    // &amp; por último: fazê-lo antes transformaria "&amp;lt;" em "<".
+                    .replace("&amp;", "&");
+        }
+        return cab.chaveReferenciada != null
+                ? "Devolucao referente a nota fiscal " + cab.chaveReferenciada
+                : null;
     }
 
     private static String naturezaDe(String tipoOperacao) {
@@ -275,6 +314,7 @@ public class DocumentoFiscalConsultaService {
         final BigDecimal valorCofins;
         final BigDecimal valorTotal;
         final BigDecimal valorTotalTributos;
+        final String infCpl;
         final String emitNome, emitCnpj, emitIe, emitEndereco, emitNumero, emitBairro, emitCidade,
                 emitUf, emitCep, emitFone;
         final String destNome, destDoc, destIe, destEndereco, destNumero, destBairro, destCidade,
@@ -325,6 +365,7 @@ public class DocumentoFiscalConsultaService {
             destCep = rs.getString("dest_cep");
             destFone = rs.getString("dest_fone");
             chaveReferenciada = rs.getString("chave_referenciada");
+            infCpl = rs.getString("inf_cpl");
         }
     }
 

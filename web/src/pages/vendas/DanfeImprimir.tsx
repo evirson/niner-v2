@@ -1,6 +1,7 @@
 import { forwardRef } from 'react'
 import { formatarDataHora, formatarSoData } from '../../lib/datas'
 import { formatarChaveGrupos4, type Danfe } from '../../lib/danfe55'
+import CodigoBarrasChave from './CodigoBarrasChave'
 import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 
 function moeda(v: number | null | undefined): string {
@@ -131,6 +132,10 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
 
         <div className="danfe-bloco danfe-chave">
           <span className="danfe-campo-rotulo">CHAVE DE ACESSO</span>
+          {/* ⭐ O código de barras CODE-128C da chave (2026-09-01) — exigência do leiaute, e o que
+              permite ao fiscal na estrada conferir a nota com um leitor em vez de digitar 44
+              números. O Nainer imprimia só os dígitos. */}
+          <CodigoBarrasChave chave={d.chaveAcesso} />
           <div className="danfe-chave-valor mono">{formatarChaveGrupos4(d.chaveAcesso)}</div>
           <div className="danfe-chave-consulta">
             Consulta de autenticidade no portal nacional da NF-e

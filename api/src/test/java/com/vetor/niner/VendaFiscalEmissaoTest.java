@@ -674,6 +674,28 @@ class VendaFiscalEmissaoTest {
         // ⚠️ O grupo do QR Code não existe no XSD da NF-e 55 — presença aqui é rejeição de schema.
         assertThat(xml).as("NF-e 55 não tem QR Code").doesNotContain("infNFeSupl");
         assertThat(xml).doesNotContain("qrCode");
+
+        // ⭐⭐ A OUTRA PONTA: o DANFE tem de MOSTRAR o que o XML tem (relato dele, 2026-09-01).
+        //
+        // Eu passei a gravar o infCpl no XML e NÃO liguei a leitura — a consulta do DANFE
+        // preenchia `informacoesComplementares` só com o texto de devolução, e o papel saía com um
+        // travessão. Ele reportou TRÊS coisas ("a observação não sai", "os tributos não saem",
+        // "tem que sair o número da venda") que eram UMA só, e os três dados estavam no XML o
+        // tempo todo — medido no banco antes de eu tocar em qualquer código.
+        //
+        // ⚠️ Um teste que confira só o XML passa com o DANFE inteiro em branco. É a família de
+        // feedback_corrigir_uma_ponta_sem_varrer_as_outras, e desta vez fui eu.
+        long idDoc = jdbc.sql("SELECT id_documento_fiscal FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(Long.class).single();
+        String danfe = mvc.perform(get("/api/v1/fiscal/documentos/" + idDoc + "/danfe")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<String>read(danfe, "$.informacoesComplementares"))
+                .as("o que o operador vê no papel tem de ser o que a SEFAZ recebeu")
+                .contains("CONTRATO: " + idVenda)
+                .contains("VENDEDOR: ");
     }
 
     private record DocumentoNfe(int modelo, int serie, String xml) {
@@ -1080,6 +1102,10 @@ class VendaFiscalEmissaoTest {
                 // vendaComAliquotaIbptResolvidaCalculaVTotTribRealEGravaComOOrigemCorreto.
                 .as("com tributos zerados a linha da Lei 12.741 não pode aparecer")
                 .doesNotContain("Valor aproximado dos tributos");
+
+        // ⚠️ A leitura pelo DANFE — a outra ponta, e a que faltava — é conferida em
+        // vendaAContribuinteSaiEmNfe55ComEnderecoESemQrCode, porque o endpoint do DANFE recusa a
+        // NFC-e com 409 (o documento dela é o cupom). Esta venda é de consumidor.
     }
 
     private int proximoNumero(long idTenant, long idEmpresa) {

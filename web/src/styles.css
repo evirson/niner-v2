@@ -1609,6 +1609,12 @@ a.menu-card:hover {
 }
 .danfe-danfe-numero { font-weight: bold; }
 .danfe-chave { flex: 1; }
+/* Código de barras CODE-128C da chave de acesso (2026-09-01). `width: 100%` + `height` fixa: o
+   jsbarcode escreve o viewBox do SVG e o navegador escala para a caixa, então a proporção das
+   barras se mantém. ⛔ Sem `shape-rendering: crispEdges` — ele arredonda cada borda para a grade
+   de pixels e engrossa umas barras comendo os espaços vizinhos (testado e revertido na etiqueta,
+   com impressão provando). */
+.danfe-chave-barras { display: block; width: 100%; height: 11mm; }
 .danfe-chave-valor { font-size: 8pt; font-weight: bold; word-break: break-all; margin: 1mm 0; }
 .danfe-chave-consulta { font-size: 6pt; }
 
