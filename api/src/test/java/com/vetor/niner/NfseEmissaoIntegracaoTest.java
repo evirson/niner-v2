@@ -399,6 +399,77 @@ class NfseEmissaoIntegracaoTest {
         }
     }
 
+    /**
+     * ⭐ A TELA consegue salvar a configuração — o corpo aqui é <b>exatamente</b> o que o
+     * {@code NfseConfiguracaoForm.tsx} monta: só os campos editáveis.
+     *
+     * <p><b>Por que este teste faltava, e o que isso custou</b> (2026-09-01): todo teste desta
+     * classe configurava a NFS-e por {@code INSERT} direto ({@code configurarNfse}), então
+     * <b>nenhum</b> passava pelo {@code PUT}. O endpoint recebia o DTO de <b>leitura</b>, cujos
+     * componentes {@code idEmpresa}/{@code configurado}/{@code crt} são primitivos, e o Jackson
+     * recusava o corpo do front inteiro com <i>"Failed to read request"</i> — a tela nunca
+     * conseguiu salvar, com a suíte verde o tempo todo. Atalho no setup do teste não é economia:
+     * é o caminho de produção deixando de ser exercitado.
+     */
+    @Test
+    void aTelaSalvaAConfiguracaoComOCorpoQueOFrontManda() throws Exception {
+        String token = assinar("salvar-config");
+        long idTenant = idTenant(token);
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = idEmpresa(c);
+
+            String resp = mvc.perform(put("/api/v1/fiscal/nfse/" + idEmpresa)
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON)
+                            .content("""
+                                    {"emiteNfse":false,"ambiente":"HOMOLOGACAO","serie":7,
+                                     "rbt12":null,"simplesAnexo":"III","aliquotaSimplesEfetiva":null}
+                                    """))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+
+            assertThat(JsonPath.<Integer>read(resp, "$.serie")).isEqualTo(7);
+            assertThat(JsonPath.<String>read(resp, "$.ambiente")).isEqualTo("HOMOLOGACAO");
+
+            // ⚠️ A asserção que importa é a do BANCO: um 200 provaria só que o corpo foi lido.
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT serie, simples_anexo FROM fiscal_config_nfse")) {
+                assertThat(rs.next()).as("o PUT tem de criar a linha no primeiro salvamento").isTrue();
+                assertThat(rs.getInt("serie")).isEqualTo(7);
+                assertThat(rs.getString("simples_anexo")).isEqualTo("III");
+            }
+        }
+    }
+
+    /**
+     * O caso negativo: campo obrigatório ausente é recusado <b>nomeando o campo</b>.
+     *
+     * <p>⚠️ Sem isto, o nulo chegava ao {@code INSERT} numa coluna {@code NOT NULL} e a violação
+     * saía pelo handler global como <i>"Registro em uso por outro cadastro — não pode ser
+     * excluído"</i>: uma mensagem sobre exclusão de cadastro para quem está salvando uma
+     * configuração. O teste prende a mensagem, não só o status — é ela que decide se o lojista
+     * resolve sozinho ou abre um chamado.
+     */
+    @Test
+    void serieAusenteRecusaNomeandoOCampo() throws Exception {
+        String token = assinar("salvar-sem-serie");
+        long idTenant = idTenant(token);
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = idEmpresa(c);
+
+            String resp = mvc.perform(put("/api/v1/fiscal/nfse/" + idEmpresa)
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON)
+                            .content("{\"emiteNfse\":false,\"ambiente\":\"HOMOLOGACAO\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andReturn().getResponse().getContentAsString();
+
+            assertThat(JsonPath.<String>read(resp, "$.detail"))
+                    .as("a mensagem tem de dizer QUAL campo falta")
+                    .contains("Série da DPS");
+        }
+    }
+
     // ---- utilitários -------------------------------------------------------------------------
 
     private String assinar(String sufixo) throws Exception {

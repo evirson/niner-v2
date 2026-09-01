@@ -36,7 +36,7 @@ public class NfseConfigController {
     @PutMapping("/{idEmpresa}")
     public NfseConfigService.Config salvar(@AuthenticationPrincipal Jwt jwt,
                                            @PathVariable long idEmpresa,
-                                           @RequestBody NfseConfigService.Config req) {
+                                           @RequestBody NfseConfigService.SalvarConfig req) {
         EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.salvar(idEmpresa, req);
     }

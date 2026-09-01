@@ -80,10 +80,23 @@ public class NfseConfigService {
     }
 
     @Transactional
-    public Config salvar(long idEmpresa, Config req) {
-        if (req.serie() < 1 || req.serie() > 99_999) {
+    public Config salvar(long idEmpresa, SalvarConfig req) {
+        // ⚠️ Os três campos abaixo são NOT NULL na tabela. Sem esta validação, o nulo chegava ao
+        // INSERT e a violação saía pelo handler global como "Registro em uso por outro cadastro —
+        // não pode ser excluído": uma mensagem sobre EXCLUSÃO DE CADASTRO para quem estava
+        // salvando uma configuração, e que não diz o campo. Recusar aqui, nomeando o campo, é a
+        // diferença entre o lojista corrigir sozinho e abrir um chamado.
+        if (req.serie() == null || req.serie() < 1 || req.serie() > 99_999) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Série da DPS fora da faixa 1..99999");
+                    "Informe a Série da DPS, entre 1 e 99999.");
+        }
+        if (req.emiteNfse() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Informe se esta empresa emite NFS-e.");
+        }
+        if (req.ambiente() == null || req.ambiente().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Informe o ambiente da NFS-e (Homologação ou Produção).");
         }
         // ⚠️ Ligar a emissão é o momento do F11: se falta o que impede emitir, o gate não liga —
         // é melhor recusar aqui, com a lista do que falta, do que deixar o operador descobrir no
@@ -115,7 +128,7 @@ public class NfseConfigService {
         return buscar(idEmpresa);
     }
 
-    private List<String> pendenciasParaLigar(long idEmpresa, Config req) {
+    private List<String> pendenciasParaLigar(long idEmpresa, SalvarConfig req) {
         Config atual = buscar(idEmpresa);
         List<String> faltas = new ArrayList<>();
         if (atual.cnpj() == null || atual.cnpj().replaceAll("\\D", "").length() != 14) {
@@ -276,6 +289,29 @@ public class NfseConfigService {
                 // o guarda ComparacaoDeDataNoFusoCertoTest me reprovou aqui, e com razão: a
                 // competência viraria um mês antes às 21h, e o defeito não reproduz em dev.
                 LocalDate.now(fusoDaLoja.da(idEmpresa)).withDayOfMonth(1), credencial);
+    }
+
+    /**
+     * O que o cliente PODE mandar ao salvar — e só isso (2026-09-01).
+     *
+     * <p><b>Por que existe, e não se reusa o {@link Config}:</b> a tela nunca conseguiu salvar.
+     * O {@code Config} é o DTO de <b>leitura</b> e carrega três componentes <b>primitivos</b>
+     * ({@code long idEmpresa}, {@code boolean configurado}, {@code int crt}); usado como
+     * {@code @RequestBody}, o Jackson exige os três, e o corpo que o front monta — só os campos
+     * editáveis — era recusado inteiro com <i>"Failed to read request"</i>. Medido isolando campo
+     * a campo: faltando qualquer um dos três dá 400; com os três, passa. A mensagem não diz qual
+     * campo, então o defeito não tinha como ser diagnosticado pela tela.
+     *
+     * <p>⚠️ Reusar o DTO de leitura ainda tinha um segundo problema, pior que o primeiro: metade
+     * dos campos dele é <b>derivada</b> ({@code configurado}, {@code crt}, {@code cnpj},
+     * {@code ultimoTeste*}) — aceitá-los no corpo é oferecer ao cliente campos que o servidor
+     * calcula, e que ele ignora em silêncio. Entrada e saída são contratos diferentes.
+     *
+     * <p>Wrappers, não primitivos: campo ausente vira {@code null} e é <b>validado com mensagem
+     * que nomeia o campo</b>, em vez de virar {@code 0}/{@code false} sem ninguém perceber.
+     */
+    public record SalvarConfig(Boolean emiteNfse, String ambiente, Integer serie, BigDecimal rbt12,
+                               String simplesAnexo, BigDecimal aliquotaSimplesEfetiva) {
     }
 
     public record Config(long idEmpresa, Boolean emiteNfse, String ambiente, int serie,

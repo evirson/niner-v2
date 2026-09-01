@@ -33,6 +33,25 @@ export interface NfseConfig {
   crt: number
 }
 
+/**
+ * O que o PUT aceita — **só os campos editáveis**, espelhando o `SalvarConfig` do back
+ * (2026-09-01).
+ *
+ * ⚠️ Antes daqui o payload era `Partial<NfseConfig>`, e a tela **nunca conseguiu salvar**: o
+ * `@RequestBody` do servidor era o DTO de leitura, cujos componentes `idEmpresa`, `configurado` e
+ * `crt` são primitivos — o Jackson recusava o corpo inteiro com *"Failed to read request"*, sem
+ * dizer qual campo faltava. `Partial<>` é confortável e não descreve contrato nenhum: ele deixa
+ * omitir o que é obrigatório e mandar o que o servidor calcula sozinho.
+ */
+export interface SalvarNfseConfig {
+  emiteNfse: boolean
+  ambiente: AmbienteFiscal
+  serie: number
+  rbt12: number | null
+  simplesAnexo: string | null
+  aliquotaSimplesEfetiva: number | null
+}
+
 /** Um item do assistente. `telaParaResolver` é o que separa aviso útil de aviso que irrita. */
 export interface VerificacaoNfse {
   item: string
@@ -104,7 +123,7 @@ export function buscarNfseConfig(idEmpresa: number): Promise<NfseConfig> {
   return api<NfseConfig>(`/api/v1/fiscal/nfse/${idEmpresa}`)
 }
 
-export function salvarNfseConfig(idEmpresa: number, payload: Partial<NfseConfig>): Promise<NfseConfig> {
+export function salvarNfseConfig(idEmpresa: number, payload: SalvarNfseConfig): Promise<NfseConfig> {
   return api<NfseConfig>(`/api/v1/fiscal/nfse/${idEmpresa}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
