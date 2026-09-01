@@ -1305,6 +1305,49 @@ está cifrado no banco. Mas isso é preparação, **não** é prova: *"o XSD nã
 (no B9 a nota passou no schema e voltou `cStat 1010`).
 
 
+### 79. ✅ `docs/TELAS.md` divergia de si mesmo e do banco — **FECHADO em 2026-09-01**
+
+⭐ **E a divergência não era só de número: três telas de verdade estavam faltando no inventário.**
+Isso só apareceu porque a conta virou script — contar de novo à mão teria produzido um quarto
+número errado.
+
+| Estava faltando | O que é |
+|---|---|
+| `/relatorio-ordens-servico` | o **Relatório de Ordens de Serviço**, entregue em 31/08 e nunca listado |
+| `/ordens-servico/nova` | a abertura de OS |
+| `/clientes/:id/historico` | o **Histórico do Cliente** |
+
+E a quarta divergência que o script achou sozinho é a **pendência #13**: `/` (Painel) está em
+*Implementações Futuras* e no código é um `<Dashboard />` de verdade. Virou **exceção nomeada**
+(com o número da pendência ao lado, para não virar filtro que esconde) em vez de ser corrigida por
+mim — 🔵 promover ou manter continua sendo decisão dele.
+
+**O conserto não foi escolher um número** — seria trocar uma imprecisão por outra. Foi:
+
+1. `scripts/auditoria/contagem-de-telas.js` — **deriva** as três bases e lista as diferenças **item
+   a item, com nome de rota**, em vez de dois totais que ninguém reconcilia. Sai com código 1
+   quando diverge.
+2. `ContagemDeTelasConfereTest` (4 testes) — reprova o **build**: toda rota do `App.tsx` está no
+   doc, o doc não lista rota que não existe mais, *Implementações Futuras* é exatamente o conjunto
+   que aponta para `<EmBreve>`, e **os números escritos batem com as tabelas do próprio arquivo**
+   (era o defeito literal: rodapé com 57 desde 26/08 e cabeçalho com 58).
+3. `docs/TELAS.md` passou a **declarar a base** de cada número, com o comando que os reproduz.
+
+⭐ **As três bases medem coisas diferentes e nenhuma está errada** — é isso que faltava dizer:
+`cfg_tela` (60) governa RBAC e inclui sub-ações **sem rota** (`estoque.contagem`, `fiscal.nfse`,
+que é uma **aba**) e exclui as públicas; o inventário (59) conta telas com rota. Elas não têm de
+bater.
+
+⚠️ **Dois defeitos meus no caminho, e os dois falhavam em silêncio:** o `\r` do CRLF entrava no
+nome da seção e fazia a comparação por igualdade dar 0 telas públicas e 0 futuras — o total saiu
+"um pouco menor" em vez de errado; e casar a rota pela **2ª célula** perdia as 11 linhas de
+Relatórios, que têm uma coluna "Subgrupo" a mais. Ambos estão comentados no script.
+
+⭐ Provado por **sabotagem**: removendo uma linha do doc, o guarda reprova nomeando a rota que
+sumiu **e** acusando o rodapé desatualizado.
+
+<details><summary>Texto original do item</summary>
+
 ### 79. 🟢 `docs/TELAS.md` diverge de si mesmo e do banco na contagem de telas
 Achado ao reauditar a documentação em 2026-08-31 (segunda passada, a pedido dele).
 
@@ -1332,6 +1375,8 @@ Ordens de Serviço em 2026-08-28."* Ou seja: foi **gerado uma vez** e vem recebe
 mão** desde então. Documento gerado que passa a ser editado manualmente perde a única garantia que
 tinha — e é por isso que ele agora discorda de si mesmo em duas linhas. O conserto é **regerá-lo**,
 não somar mais um item.
+
+</details>
 ---
 
 ## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-08-31)

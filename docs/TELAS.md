@@ -7,20 +7,43 @@
 > ⚠️ **É retrato do CÓDIGO, não da intenção.** Se divergir de outra documentação, o código
 > está certo e a outra doc envelheceu.
 >
-> **Contagem em 2026-08-31 (medida deste arquivo, não estimada):** **58 telas do ERP em uso** +
-> **3 públicas** (entrada, sem login) + **6 em Implementações Futuras** = 67 linhas. A 58ª é a
-> **Configuração da NFS-e** (V101/V103, 2026-08-31).
+> ## ⛔ NÃO SOME UM NÚMERO À MÃO — rode o script (pendência #79, 2026-09-01)
 >
-> ⚠️ **A NFS-e acrescentou uma tela e meia, não duas.** A *Configuração da NFS-e* é tela própria
-> com rota e item de menu; a listagem de NFS-e é uma **aba dentro de Documentos Fiscais**, sem rota
-> própria — mas tem chave em `cfg_tela` (`fiscal.nfse`) porque o RBAC governa emitir e cancelar.
-> Quem contar por `cfg_tela` acha 59; quem contar por rota acha 58. As duas contagens estão certas,
-> medem coisas diferentes.
+> Este arquivo foi **gerado uma vez** (2026-08-25) e passou a receber acréscimos manuais. Documento
+> gerado que vira documento editado perde a única garantia que tinha, e foi o que aconteceu: em
+> 2026-08-31 ele dizia **58** numa linha e **57** noutra, e o banco dizia **60**.
 >
-> ⚠️ **Declare sempre a base ao citar o número.** Até hoje três documentos traziam contagens
-> diferentes (57, 58 e 60) porque cada um incluía coisas distintas — as públicas, as futuras, ou
-> as telas do marketplace que saíram em 2026-08-28. Comando que reproduz a conta:
-> `awk '/^## /{sec=$0} /^| .* | `//{cnt[sec]++} END{for(s in cnt) print cnt[s], s}' docs/TELAS.md`
+> **A contagem é derivada, não digitada:**
+>
+> ```
+> docker exec -i niner-db psql -U niner_owner -d niner_db -tAc \
+>   "SELECT chave FROM cfg_tela ORDER BY chave;" > "$TEMP/cfg_tela.txt"
+> node scripts/auditoria/contagem-de-telas.js
+> ```
+>
+> Ele imprime as três bases e — o que interessa — **lista as diferenças item a item**, com nome de
+> rota, para que a próxima divergência apareça como uma linha e não como dois totais que ninguém
+> reconcilia. Sai com código 1 quando há divergência.
+>
+> **Contagem em 2026-09-01, produzida por esse comando:**
+>
+> | Base | Número | O que mede |
+> |---|---|---|
+> | `docs/TELAS.md` — telas do ERP em uso | **59** | linhas de tabela com rota, fora das públicas e das futuras |
+> | `docs/TELAS.md` — públicas | **3** | entrada, sem login |
+> | `docs/TELAS.md` — Implementações Futuras | **6** | rota existe apontando para `<EmBreve>` |
+> | `docs/TELAS.md` — telas-filhas | **23** | abrem de uma lista, sem item de menu |
+> | `web/src/App.tsx` — rotas | **121** | tudo que o roteador registra |
+> | `cfg_tela` — chaves | **60** | o que o **RBAC** governa (20 são sub-chaves com ponto) |
+>
+> ⚠️ **As três bases medem coisas diferentes, e nenhuma está errada.** `cfg_tela` inclui sub-ações
+> **sem rota própria** (`estoque.contagem`, `estoque.zerar-contagem`, `fiscal.nfse` — que é uma
+> **aba** de Documentos Fiscais) e exclui as públicas, que não passam por permissão. Por isso 60 e
+> 59 não têm de bater: **declare a base ao citar o número.**
+>
+> ⚠️ **Divergência conhecida e registrada:** `/` (Painel) está em *Implementações Futuras* e no
+> código é um `<Dashboard />` de verdade — é a **pendência #13**, decisão do dono do produto
+> (promover ou manter). O script a trata como exceção nomeada, não a esconde.
 >
 > A coluna **Spec** é casada por semelhança de nome, com um de-para manual para os casos em
 > que o arquivo tem outro nome. ⚠️ Um `—` ali significa *não encontrei*, **não** *não existe*.
@@ -139,6 +162,7 @@ nomes antigos continuam achando a tela na busca do topo via `sinonimos`.
 |---|---|---|---|
 | Faturamento | Vendas | `/relatorio-vendas` | `docs/telas/relatorio-vendas.md` |
 | Faturamento | Comissões | `/relatorio-comissoes` | `docs/telas/relatorio-comissoes.md` |
+| Faturamento | Ordens de Serviço | `/relatorio-ordens-servico` | `docs/telas/relatorio-ordens-servico.md` |
 | Estoque | Posição de Estoque | `/relatorio-estoque` | `docs/telas/relatorio-estoque.md` |
 | Estoque | Movimentação de Produtos | `/relatorio-movimentacao-produtos` | `docs/telas/relatorio-movimentacao-produtos.md` |
 | Estoque | Etiquetas de Produtos | `/etiqueta-emissao` | `docs/telas/etiqueta-emissao.md` |
@@ -166,12 +190,15 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 - `/login`
 - `/orcamentos/novo`
+- `/ordens-servico/nova`
 - `/produtos/novo`
 - `/produtos/configuracao`
 - `/estoque/nova`
 - `/entrada-produtos-compra/nova`
 - `/clientes/novo`
 - `/clientes/configuracao`
+- `/clientes/:id/historico` — **Histórico do Cliente** (compras, crediário e devoluções; abre pelo
+  ícone de relógio na lista de Clientes)
 - `/funcionarios/novo`
 - `/funcionarios/configuracao`
 - `/planos-contas/novo`
@@ -189,7 +216,12 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 ---
 
-**57 telas em uso** · **4 em construção** · **21 telas-filhas**.
+**59 telas em uso** · **6 em Implementações Futuras** · **23 telas-filhas** · **3 públicas**
+(derivado em 2026-09-01 por `node scripts/auditoria/contagem-de-telas.js` — ⛔ não editar à mão).
+
+⚠️ Este rodapé trazia **57 / 4 / 21** desde 2026-08-26 e ninguém percebeu, enquanto o cabeçalho
+dizia outra coisa. É a razão de a contagem ter virado script: dois números escritos à mão no mesmo
+arquivo divergem, e nada acusa.
 
 ⚠️ Atualizado em 2026-08-26. Entraram três telas: **Relatório de Contas a Pagar / Pagas** e
 **Exportação de XML em Lote** (as duas saíram de "em construção" — ⚠️ a rota de cada uma já existia
