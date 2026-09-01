@@ -400,6 +400,48 @@ class NfseEmissaoIntegracaoTest {
     }
 
     /**
+     * ⛔ Serviço com código que exige bloco extra da DPS é recusado <b>antes de reservar número</b>.
+     *
+     * <p><b>Por que a guarda mudou de lugar em 2026-09-01:</b> ela existia só no front, que
+     * recusava a ESCOLHA do código no cadastro — e o efeito colateral foi um relato dele:
+     * <i>"coloco o código do serviço e ele não grava"</i>. Era verdade: clicar num código de obra
+     * retornava sem gravar, deixando um aviso cinza no rodapé. Por decisão dele o cadastro passou
+     * a gravar <b>qualquer</b> código, e a trava veio para cá.
+     *
+     * <p>⚠️ Sem esta guarda, o pedido seguiria para a montagem: XML sem o grupo obrigatório, e a
+     * rejeição do Sefin viria <b>depois</b> de consumir o {@code nDPS} — numeração queimada a cada
+     * tentativa, que é exatamente o preço que o {@code cStat 704} cobrou na NFC-e hoje.
+     *
+     * <p>⚠️ E guarda de tela nunca foi proteção (P4): quem chama a API direto nunca passou pelo
+     * seletor.
+     */
+    @Test
+    void servicoQueExigeBlocoExtraRecusaAntesDeConsumirNumero() throws Exception {
+        Cenario c = prepararLojaQueVendeDoisServicos("bloco-extra");
+        try (Connection conn = abrirConexao(c.idTenant());
+             Statement st = conn.createStatement()) {
+            // 070602 (colocação de vidros) é do grupo "obra" na carga oficial da V099.
+            st.execute("UPDATE produto_servico SET codigo_tributacao_nacional = '070602' "
+                    + "WHERE id_produto IN (SELECT id_produto FROM produto WHERE descricao = 'BANHO E TOSA')");
+        }
+
+        String erro = mvc.perform(post("/api/v1/nfse/vendas/" + c.idVenda() + "/emitir")
+                        .header("Authorization", "Bearer " + c.token()))
+                .andExpect(status().isConflict())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(erro)
+                .as("a mensagem nomeia o serviço, o código e o bloco que falta")
+                .contains("BANHO E TOSA").contains("070602").contains("obra");
+        assertThat(erro)
+                .as("o cadastro NÃO está errado — dizer que está manda o lojista corrigir o que está certo")
+                .contains("cadastro do serviço está correto");
+        assertThat(contarNotas(c))
+                .as("recusar depois de reservar o nDPS queimaria numeração a cada tentativa")
+                .isZero();
+    }
+
+    /**
      * ⭐ A TELA consegue salvar a configuração — o corpo aqui é <b>exatamente</b> o que o
      * {@code NfseConfiguracaoForm.tsx} monta: só os campos editáveis.
      *

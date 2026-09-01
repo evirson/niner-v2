@@ -171,6 +171,30 @@ public class VendaNfseAssembler {
                     + ". Informe na aba Serviço do cadastro do produto — a lista tem busca por "
                     + "texto e sugestão pelo ramo da loja.");
         }
+        // ⛔ Serviço cujo código exige bloco extra da DPS (obra, atvEvento, lsadppu, explRod) não é
+        // montável pelo v1 — e a trava tem de estar AQUI (2026-09-01).
+        //
+        // Até esta data ela existia só no front, que recusava a ESCOLHA do código. O cadastro
+        // passou a gravar qualquer código (decisão dele), e sem esta guarda o pedido seguiria para
+        // a montagem: o XML sairia sem o grupo obrigatório, o Sefin recusaria com um código de
+        // erro que ninguém traduz — e a rejeição viria DEPOIS de reservar o nDPS, queimando
+        // numeração a cada tentativa. Barrar antes disso é o mesmo princípio do F11.
+        //
+        // ⚠️ Guarda de tela nunca foi proteção (P4): quem chama a API direto, ou um serviço
+        // cadastrado antes desta regra, nunca passou pelo seletor.
+        List<String> comBlocoExtra = linhas.stream()
+                .filter(l -> l.grupoDps() != null && !l.grupoDps().isBlank())
+                .map(l -> l.descricao() + " (" + l.codigoTributacaoNacional() + ", exige o bloco "
+                        + l.grupoDps() + ")")
+                .distinct()
+                .toList();
+        if (!comBlocoExtra.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O layout nacional exige informações extras que o Nainer ainda não emite em: "
+                    + String.join(", ", comBlocoExtra)
+                    + ". O cadastro do serviço está correto — o que falta é o bloco no XML. "
+                    + "Fale com o suporte antes de tentar de novo.");
+        }
     }
 
     private Cabecalho buscarCabecalho(long idVenda) {
@@ -245,7 +269,7 @@ public class VendaNfseAssembler {
                                pmd.valor_desconto, p.descricao,
                                ps.codigo_tributacao_nacional, ps.codigo_tributacao_municipal,
                                ps.aliquota_iss, ps.iss_retido_padrao,
-                               s.local_incidencia
+                               s.local_incidencia, s.grupo_dps
                           FROM produto_movimento_detalhe pmd
                           JOIN produto_movimento_mestre pmm
                             ON pmm.id_tenant = pmd.id_tenant AND pmm.id_movimento = pmd.id_movimento
@@ -274,7 +298,8 @@ public class VendaNfseAssembler {
                         rs.getString("codigo_tributacao_municipal"),
                         rs.getBigDecimal("aliquota_iss"),
                         rs.getBoolean("iss_retido_padrao"),
-                        rs.getString("local_incidencia")))
+                        rs.getString("local_incidencia"),
+                        rs.getString("grupo_dps")))
                 .list();
     }
 
@@ -327,7 +352,11 @@ public class VendaNfseAssembler {
             long idVariacao, String descricao, BigDecimal quantidade, BigDecimal precoVenda,
             BigDecimal valorDesconto, String codigoTributacaoNacional,
             String codigoTributacaoMunicipal, BigDecimal aliquotaIss, boolean issRetido,
-            String localIncidencia) {
+            String localIncidencia,
+            /** Preenchido (obra, atvEvento, lsadppu, explRod) = a DPS exige um bloco que o v1 não
+             *  monta. Vem da fonte oficial, junto do local de incidência — a emissão recusa antes
+             *  de reservar número, e o cadastro do serviço continua livre para gravar o código. */
+            String grupoDps) {
     }
 
     /** Tudo que vem da venda, da empresa e da configuração — resolvido uma vez só. */
