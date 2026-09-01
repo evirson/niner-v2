@@ -250,11 +250,101 @@ class SangriaCaixaCrudTest {
                                 """.formatted(plano)))
                 .andExpect(status().isConflict());
 
+        // ⚠️ `id_tenant` explícito, e não é preciosismo: a conexão do Testcontainers usa o
+        // SUPERUSUÁRIO do container, que ignora RLS (ver
+        // feedback_testcontainers_nao_usa_niner_app). Sem o filtro, este `count(*)` conta o banco
+        // INTEIRO — a asserção passava só enquanto nenhum outro teste da classe gravava sangria, e
+        // quebrou no dia em que um passou a gravar. Contagem sem tenant aqui não afirma nada sobre
+        // este tenant.
         try (Connection c = abrirConexao(idTenant);
-             PreparedStatement ps = c.prepareStatement("SELECT count(*) FROM caixa_sangria")) {
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT count(*) FROM caixa_sangria WHERE id_tenant = ?")) {
+            ps.setLong(1, idTenant);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 assertThat(rs.getInt(1)).as("nenhuma sangria pode ter nascido").isZero();
+            }
+        }
+    }
+
+    /**
+     * ⭐ <b>CONCORRÊNCIA REAL — duas sangrias ao MESMO tempo da mesma gaveta.</b>
+     *
+     * <p>Segunda das corridas escritas em 2026-09-01 (a outra é o limite de crédito, em
+     * {@code PdvCrudTest}). Até aqui os {@code FOR UPDATE} de caixa e sangria tinham sido
+     * <b>lidos</b> e considerados corretos, nunca <b>exercitados</b> — era o limite declarado em
+     * `docs/PENDENCIAS.md` #68.
+     *
+     * <p>Com R$ 100 na gaveta, duas sangrias de R$ 80 disparadas juntas: uma passa, a outra tem de
+     * bater no saldo. Sem a trava, as duas leem "R$ 100 disponíveis" ao mesmo tempo e o caixa fecha
+     * o dia devendo R$ 60 que nunca existiram — e o dinheiro do outro lado já foi para a conta
+     * corrente, então não é um número errado numa tela: é depósito registrado sem lastro.
+     *
+     * <p>⚠️ Não mede tempo nem dorme (ver {@code feedback_testes_frageis_por_relogio}): as duas
+     * threads saem juntas de um {@link java.util.concurrent.CountDownLatch} e o que se afirma é a
+     * <b>invariante</b> — uma sangria gravada, e a soma sangrada nunca acima do que havia na
+     * gaveta. Se as threads não se cruzarem numa execução, o teste continua verdadeiro; ele nunca
+     * acusa falso.
+     */
+    @Test
+    void duasSangriasSimultaneasNaoTiramMaisDoQueTemNaGaveta() throws Exception {
+        TenantNovo t = assinar("sangria-corrida");
+        long idTenant = extrairIdTenant(t.token());
+        abrirCaixaComFundo(t.token(), "100.00");
+        criarConta(t.token(), t.idEmpresa(), "BB003");
+        String plano = primeiroPlanoDeContas(t.token());
+
+        String corpo = """
+                {"idContaCorrente":"BB003","valor":80.00,"idPlanoContas":"%s"}
+                """.formatted(plano);
+
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var aceitas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        Runnable sangrar = () -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                int status = mvc.perform(post("/api/v1/caixa/sangrias")
+                                .header("Authorization", "Bearer " + t.token())
+                                .contentType(APPLICATION_JSON).content(corpo))
+                        .andReturn().getResponse().getStatus();
+                if (status == 200 || status == 201) {
+                    aceitas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(sangrar, "sangria-1");
+        Thread b = new Thread(sangrar, "sangria-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertThat(falhas).as("nenhuma thread pode explodir por outro motivo").isEmpty();
+        assertThat(aceitas.get())
+                .as("R$ 80 + R$ 80 numa gaveta com R$ 100: só uma pode passar")
+                .isEqualTo(1);
+
+        // ⭐ A prova vem do BANCO: uma linha, R$ 80,00. Contar só o status HTTP deixaria passar um
+        // servidor que respondesse 409 e gravasse assim mesmo.
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT count(*), COALESCE(SUM(valor), 0) FROM caixa_sangria WHERE id_tenant = ?")) {
+            ps.setLong(1, idTenant);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertThat(rs.getInt(1)).as("uma sangria, não duas").isEqualTo(1);
+                assertThat(rs.getBigDecimal(2))
+                        .as("não pode sair da gaveta mais do que havia nela")
+                        .isEqualByComparingTo(new java.math.BigDecimal("80.00"));
             }
         }
     }
@@ -301,8 +391,13 @@ class SangriaCaixaCrudTest {
 
         long localizador;
         try (Connection c = abrirConexao(idTenant);
+             // ⚠️ Sem `id_tenant` isto pegava o PRIMEIRO movimento de sangria do banco inteiro
+             // (o superusuário do Testcontainers ignora RLS), e o DELETE seguinte respondia 404
+             // por procurar, no tenant deste teste, uma linha que é de outro.
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT localizador FROM conta_corrente_movimento WHERE id_sangria IS NOT NULL")) {
+                     "SELECT localizador FROM conta_corrente_movimento "
+                             + "WHERE id_tenant = ? AND id_sangria IS NOT NULL")) {
+            ps.setLong(1, idTenant);
             try (ResultSet rs = ps.executeQuery()) {
                 assertThat(rs.next()).isTrue();
                 localizador = rs.getLong(1);
@@ -317,8 +412,9 @@ class SangriaCaixaCrudTest {
         // E continua lá — o 409 não pode ter apagado nada pelo caminho.
         try (Connection c = abrirConexao(idTenant);
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT valor FROM conta_corrente_movimento WHERE localizador = ?")) {
-            ps.setLong(1, localizador);
+                     "SELECT valor FROM conta_corrente_movimento WHERE id_tenant = ? AND localizador = ?")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, localizador);
             try (ResultSet rs = ps.executeQuery()) {
                 assertThat(rs.next()).isTrue();
                 assertThat(rs.getBigDecimal(1)).isEqualByComparingTo(new BigDecimal("150.00"));

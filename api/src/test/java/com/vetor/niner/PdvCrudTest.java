@@ -627,6 +627,118 @@ class PdvCrudTest {
         }
     }
 
+    /**
+     * ⭐ <b>CONCORRÊNCIA REAL — duas vendas ao MESMO tempo contra o mesmo limite de crédito.</b>
+     *
+     * <p>Este é o primeiro teste do projeto a exercitar um {@code FOR UPDATE} com <b>duas
+     * transações simultâneas</b>. Até 2026-09-01 os ~30 {@code FOR UPDATE} de caixa, sangria, cota,
+     * OS e vale tinham sido <b>lidos</b> e considerados corretos — nenhum tinha sido rodado em
+     * corrida (era o item declarado em `docs/PENDENCIAS.md` #68).
+     *
+     * <p>O cenário é o que está escrito no próprio código de {@code PdvVendaService}: <i>"dois
+     * caixas vendendo R$ 800 em crediário para o mesmo cliente com limite de R$ 1.000 leem 'R$ 0
+     * em aberto' ao mesmo tempo e gravam os dois — o limite vira decoração"</i>. Aqui esse
+     * parágrafo deixa de ser afirmação e passa a ser medida.
+     *
+     * <p><b>Por que este teste não é frágil por relógio</b> (ver
+     * {@code feedback_testes_frageis_por_relogio}): ele não mede tempo nem dorme. As duas threads
+     * são soltas por um {@link java.util.concurrent.CountDownLatch} e o que se afirma é a
+     * <b>invariante do resultado</b> — exatamente uma venda aprovada, e a soma em aberto no
+     * <b>banco</b> nunca acima do limite. Se o {@code FOR UPDATE} sumir, as duas passam; se as
+     * threads não chegarem a se cruzar, o teste ainda é verdadeiro (só não prova nada nesta
+     * execução), e nunca acusa falso.
+     *
+     * <p>⚠️ A asserção decisiva é a do <b>banco</b>, não a contagem de HTTP 201: um servidor que
+     * respondesse 201 duas vezes e gravasse uma só passaria pela contagem — e o defeito real é o
+     * inverso, gravar duas.
+     */
+    @Test
+    void duasVendasSimultaneasNaoFuramOMesmoLimiteDeCredito() throws Exception {
+        String token = assinarNovoTenant("limite-credito-corrida");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Corrida Credito", true);
+        long idCarteira = criarTipoCarteira(token, "CREDIARIO CORRIDA", "CREDIARIO", 30, 1, 1);
+        // Limite de R$ 1.000: cabe UMA venda de R$ 800, nunca duas.
+        long idCliente = criarClienteComLimiteCredito(token, "Cliente Corrida Credito", "1000.00");
+        long idFuncionario = criarFuncionario(token, "Vendedor Corrida");
+        abrirCaixaDinheiro(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("100.000"));
+
+            // 16 × R$ 50,00 = R$ 800,00 — o pagamento tem de fechar o saldo, senão a venda é
+            // recusada por 400 ANTES de chegar ao limite de crédito, e o teste "passaria" medindo
+            // outra coisa (foi o que aconteceu na primeira versão: duas recusas por valor).
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":16}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":800.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            var largada = new java.util.concurrent.CountDownLatch(1);
+            var prontas = new java.util.concurrent.CountDownLatch(2);
+            var aprovadas = new java.util.concurrent.atomic.AtomicInteger();
+            var erros = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+            var respostas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+            Runnable vender = () -> {
+                try {
+                    prontas.countDown();
+                    largada.await();
+                    var resposta = mvc.perform(post("/api/v1/pdv/vendas")
+                                    .header("Authorization", "Bearer " + token)
+                                    .contentType(APPLICATION_JSON).content(corpo))
+                            .andReturn().getResponse();
+                    if (resposta.getStatus() == 201) {
+                        aprovadas.incrementAndGet();
+                    } else {
+                        respostas.add(resposta.getStatus() + " " + resposta.getContentAsString());
+                    }
+                } catch (Exception e) {
+                    erros.add(e.toString());
+                }
+            };
+
+            Thread caixa1 = new Thread(vender, "caixa-1");
+            Thread caixa2 = new Thread(vender, "caixa-2");
+            caixa1.start();
+            caixa2.start();
+            prontas.await();      // as duas já estão no portão
+            largada.countDown();  // largada simultânea
+            caixa1.join();
+            caixa2.join();
+
+            org.assertj.core.api.Assertions.assertThat(erros).as("nenhuma das threads pode explodir por outro motivo").isEmpty();
+            org.assertj.core.api.Assertions.assertThat(aprovadas.get())
+                    .as("R$ 800 + R$ 800 contra limite de R$ 1.000: só uma pode passar. Recusas: " + respostas)
+                    .isEqualTo(1);
+
+            // ⭐ A prova que interessa vem do BANCO. Sem o FOR UPDATE, as duas transações leem
+            // "R$ 0,00 em aberto" e gravam as duas — e é ESTA soma que denuncia.
+            // ⚠️ A MESMA consulta que o serviço usa para decidir (via venda + tipo_carteira):
+            // contas_receber não tem id_cliente, e escrever uma soma "parecida" aqui mediria outra
+            // coisa e daria um verde que não significa nada.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT COALESCE(SUM(cr.valor_receber), 0)
+                      FROM contas_receber cr
+                      JOIN venda v ON v.id_tenant = cr.id_tenant AND v.id_venda = cr.id_venda
+                      JOIN tipo_carteira tc ON tc.id_tenant = cr.id_tenant AND tc.id_carteira = cr.id_carteira
+                     WHERE cr.id_tenant = ? AND v.id_cliente = ?
+                       AND tc.categoria_carteira = 'CREDIARIO' AND cr.data_recebimento IS NULL
+                    """)) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idCliente);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    org.assertj.core.api.Assertions.assertThat(rs.getBigDecimal(1))
+                            .as("o crediário em aberto não pode passar do limite de R$ 1.000")
+                            .isEqualByComparingTo(new BigDecimal("800.00"));
+                }
+            }
+        }
+    }
+
     @Test
     void limiteDeCreditoZeroOuNaoDefinidoNaoBloqueiaCrediario() throws Exception {
         String token = assinarNovoTenant("sem-limite-credito");

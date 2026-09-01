@@ -329,6 +329,34 @@ achar:
 - **Tudo que depende da resposta da SEFAZ** — o `<ano>` da inutilização (#66), os autorizadores das
   26 UFs fora do PR, e a reação real a qualquer XML montado. *Validação que confere o próprio
   resultado não prova nada.*
+> ✅ **PARCIALMENTE FECHADO em 2026-09-01 — as duas primeiras corridas de verdade.** Até esta data
+> nenhum dos ~30 `FOR UPDATE` do projeto tinha sido **exercitado** com duas transações; agora dois
+> foram, os dois em caminho de dinheiro, os dois provados por sabotagem:
+>
+> | Corrida | O que prova | Sabotagem |
+> |---|---|---|
+> | `PdvCrudTest.duasVendasSimultaneasNaoFuramOMesmoLimiteDeCredito` | duas vendas de R$ 800 em crediário, limite R$ 1.000 → **uma** passa | sem o `FOR UPDATE`, **3 de 3** rodadas aprovaram as duas (R$ 1.600 em aberto) |
+> | `SangriaCaixaCrudTest.duasSangriasSimultaneasNaoTiramMaisDoQueTemNaGaveta` | duas sangrias de R$ 80, gaveta com R$ 100 → **uma** passa | sem a trava, **2 de 2** rodadas passaram as duas |
+>
+> O cenário do crediário é **literalmente o parágrafo que estava escrito no código** de
+> `PdvVendaService` (*"dois caixas vendendo R$ 800 … leem R$ 0 em aberto ao mesmo tempo e gravam os
+> dois"*): deixou de ser afirmação e virou medida.
+>
+> ⚠️ **Nenhum dos dois mede tempo nem dorme** ([[feedback_testes_frageis_por_relogio]]): as threads
+> saem juntas de um `CountDownLatch` e o que se afirma é a **invariante do resultado**, conferida no
+> **banco**. Se as threads não se cruzarem numa execução, o teste continua verdadeiro — ele nunca
+> acusa falso.
+>
+> ⭐ **E escrever a corrida achou um defeito nos testes vizinhos.** Meu teste novo quebrou dois que
+> passavam: `SELECT count(*) FROM caixa_sangria` **sem `id_tenant`**. A conexão do Testcontainers usa
+> o **superusuário do container, que ignora RLS** ([[feedback_testcontainers_nao_usa_niner_app]]),
+> então aquela contagem media o **banco inteiro** — e só passava enquanto nenhum outro teste da
+> classe gravasse sangria. Um deles pegava o *primeiro* movimento do banco e o `DELETE` seguinte
+> respondia 404. Os três foram corrigidos com filtro explícito de tenant (P8).
+>
+> ⛔ **Continua sem corrida:** cota de vendas, reserva de estoque da OS, vale-mercadoria,
+> numeração fiscal, recebimento de crediário e o `SKIP LOCKED` do webhook.
+
 - **Concorrência real** — os `FOR UPDATE` (caixa, sangria, cota, OS) foram lidos e estão nos
   lugares certos, mas nenhum foi exercitado com duas transações simultâneas.
 - **O contrato campo a campo entre os DTOs do TypeScript e os records do Java** — um campo renomeado
