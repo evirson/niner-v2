@@ -308,6 +308,17 @@ export interface DadosFiscaisComprovante {
   valorTribFederal: number
   valorTribEstadual: number
   valorTribMunicipal: number
+  /**
+   * ⭐ O `infCpl` do XML **assinado** (2026-09-01) — o texto que a SEFAZ recebeu, com a observação
+   * do operador e o valor aproximado dos tributos. O cupom imprime **este** campo em vez de
+   * remontar um texto parecido: informação exigida no documento fiscal não pode existir só no
+   * retrato dele.
+   *
+   * ⚠️ `null` em nota emitida **antes** daquela data (o XML não tem a tag) — e é por isso que o
+   * cupom guarda o texto antigo como alternativa, em vez de imprimir uma área em branco na
+   * reimpressão de uma venda velha.
+   */
+  informacoesComplementares: string | null
 }
 
 /** Cabeçalho fiscal completo da empresa (2026-08-19, DANFE) — só presente quando `dadosFiscais`

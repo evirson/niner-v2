@@ -1,6 +1,7 @@
 package com.vetor.niner.vendas;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
+import com.vetor.niner.fiscal.documento.XmlFiscal;
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.ItemOrcamentoResponse;
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.OrcamentoResponse;
 import com.vetor.niner.vendas.orcamento.OrcamentoService;
@@ -764,7 +765,11 @@ public class PdvVendaService {
                             documentoConsumidor, rs.getBigDecimal("base_ibs_cbs"),
                             rs.getBigDecimal("valor_ibs_uf"), rs.getBigDecimal("valor_ibs_mun"),
                             rs.getBigDecimal("valor_cbs"), rs.getBigDecimal("valor_trib_federal"),
-                            rs.getBigDecimal("valor_trib_estadual"), rs.getBigDecimal("valor_trib_municipal"));
+                            rs.getBigDecimal("valor_trib_estadual"), rs.getBigDecimal("valor_trib_municipal"),
+                            // ⭐ O texto das informações complementares vem do XML ASSINADO, nunca
+                            // remontado aqui (2026-09-01): é o que a SEFAZ recebeu, e o cupom
+                            // existe para mostrar o documento, não uma paráfrase dele.
+                            XmlFiscal.desescapar(extrairTag(xml, "infCpl")));
                 })
                 .optional()
                 .orElse(null);

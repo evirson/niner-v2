@@ -303,6 +303,23 @@ public final class PdvDtos {
             BigDecimal baseIbsCbs, BigDecimal valorIbsUf, BigDecimal valorIbsMun, BigDecimal valorCbs,
             /** Detalhamento federal/estadual/municipal da Lei 12.741 (2026-08-19) — os 3 somam
              *  {@code valorTotalTributos}; o DANFE mostra cada parcela, não só o total. */
-            BigDecimal valorTribFederal, BigDecimal valorTribEstadual, BigDecimal valorTribMunicipal) {
+            BigDecimal valorTribFederal, BigDecimal valorTribEstadual, BigDecimal valorTribMunicipal,
+            /**
+             * ⭐ O {@code infCpl} do XML <b>assinado</b> (2026-09-01) — o mesmo texto que a SEFAZ
+             * recebeu, já desescapado. É ele que o cupom imprime, em vez de o React remontar um
+             * texto parecido.
+             *
+             * <p><b>Por que existe:</b> em 2026-09-01 o {@code VendaFiscalAssembler} passou a
+             * gravar no {@code infCpl} a observação que o operador digita antes de emitir, o valor
+             * aproximado dos tributos (Lei 12.741/2012) e os dados da venda — e a leitura foi
+             * ligada só no DANFE A4. Medido na nota 62: a observação estava no XML autorizado e
+             * <b>não saía no cupom</b> que o consumidor leva. Corrigir uma ponta e não varrer as
+             * outras é o defeito mais comum deste projeto.
+             *
+             * <p>⚠️ {@code null} para documento emitido <b>antes</b> daquela data: o XML dele não
+             * tem a tag. O cupom trata esse caso mantendo o texto antigo, senão a reimpressão de
+             * uma venda velha sairia com a área de informações adicionais em branco.
+             */
+            String informacoesComplementares) {
     }
 }

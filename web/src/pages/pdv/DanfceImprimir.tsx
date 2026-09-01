@@ -151,26 +151,63 @@ const DanfceImprimir = forwardRef<
           </tbody>
         </table>
 
+        {/* ⛔ O "Valor aproximado dos tributos" (Lei 12.741/2012) NÃO é escrito aqui (2026-09-01):
+            desde que o `VendaFiscalAssembler` passou a gravá-lo no `infCpl`, ele chega pronto no
+            bloco abaixo, vindo do XML autorizado. Reescrevê-lo aqui o imprimiria DUAS vezes — e a
+            versão do React não é a que a SEFAZ recebeu.
+
+            O que sobra neste bloco é o detalhamento por ente federativo, que o `infCpl` não
+            carrega: sem ele o cupom perderia informação que hoje imprime. */}
         <Separador />
         <div className="danfce-tributo">
-          Valor aproximado dos tributos {moedaDanfce(f.valorTotalTributos)} ({formatarPercentual(percentualTributo)} %)
+          Tributos aproximados por ente ({formatarPercentual(percentualTributo)} % do total)
           <br />
           Federal: {formatarPercentual(percentualTrib(f.valorTribFederal))}% Estadual:{' '}
           {formatarPercentual(percentualTrib(f.valorTribEstadual))}% Municipal:{' '}
           {formatarPercentual(percentualTrib(f.valorTribMunicipal))}%
-          <br />
-          Fonte: IBPT
+          {/* ⚠️ "Fonte: IBPT" SÓ quando não há `infCpl` (2026-09-01, visto no cupom impresso na
+              tela): o texto do XML já termina com "(Lei 12.741/2012 - Fonte: IBPT)", e repetir a
+              fonte gastava uma das 42 colunas da bobina dizendo duas vezes a mesma coisa. Na nota
+              antiga, que cai no caminho de baixo, ela continua sendo a única menção à fonte. */}
+          {!f.informacoesComplementares && (
+            <>
+              <br />
+              Fonte: IBPT
+            </>
+          )}
         </div>
 
         <Separador />
         <div className="danfce-adicional">
           Informações adicionais de interesse do contribuinte
           <br />
-          Venda Nº: {c.idVenda}
-          {(c.numeroCaixa != null || c.codigoVendedor != null) && <br />}
-          {c.numeroCaixa != null && `CX.: ${c.numeroCaixa}`}
-          {c.numeroCaixa != null && c.codigoVendedor != null && ', '}
-          {c.codigoVendedor != null && `VEN.: ${c.codigoVendedor}-${c.nomeVendedor}`}
+          {/* ⭐ O texto vem INTEIRO do `infCpl` do XML assinado (2026-09-01), como no DANFE A4:
+              número da venda, forma de pagamento, vendedor, a OBSERVAÇÃO que o operador digitou
+              antes de emitir e o valor aproximado dos tributos.
+
+              ⛔ Antes o React remontava aqui um texto PARECIDO com o do XML — e a observação do
+              operador, que ia para a SEFAZ, simplesmente não saía no papel que o consumidor leva
+              (medido na NFC-e nº 62). O cupom mostra o documento, nunca uma paráfrase dele.
+
+              ⚠️ Nota emitida ANTES desta data cai no caminho de baixo: o XML dela não tem a tag,
+              `extrairTag` devolve `null` e a reimpressão sairia com a área de informações
+              adicionais EM BRANCO. Ali o texto antigo continua sendo melhor que nada — e é ele
+              que traz o valor aproximado dos tributos, que naquele XML também não está. O ternário
+              testa a veracidade (e não `!= null`) de propósito, para que string vazia caia no
+              mesmo caminho. */}
+          {f.informacoesComplementares ? (
+            <span style={{ whiteSpace: 'pre-line' }}>{f.informacoesComplementares}</span>
+          ) : (
+            <>
+              Venda Nº: {c.idVenda}
+              {(c.numeroCaixa != null || c.codigoVendedor != null) && <br />}
+              {c.numeroCaixa != null && `CX.: ${c.numeroCaixa}`}
+              {c.numeroCaixa != null && c.codigoVendedor != null && ', '}
+              {c.codigoVendedor != null && `VEN.: ${c.codigoVendedor}-${c.nomeVendedor}`}
+              <br />
+              Valor aproximado dos tributos {moedaDanfce(f.valorTotalTributos)}
+            </>
+          )}
           {f.baseIbsCbs > 0 && (
             <>
               <br />

@@ -18,7 +18,7 @@ import java.util.Locale;
  * silenciosa: o montador novo escaparia diferente do antigo e ninguém notaria até a SEFAZ rejeitar
  * — ou pior, aceitar uma nota com o texto errado.
  */
-final class XmlFiscal {
+public final class XmlFiscal {
 
     private XmlFiscal() {
     }
@@ -46,6 +46,32 @@ final class XmlFiscal {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&apos;");
+    }
+
+    /**
+     * O inverso de {@link #texto} — devolve ao texto lido de um XML já gravado os caracteres que a
+     * montagem escapou.
+     *
+     * <p><b>Por que é público e mora aqui</b> (2026-09-01): quem LÊ o {@code infCpl} do
+     * {@code xml_assinado} para mostrar num documento impresso precisa desfazer exatamente o que
+     * {@link #texto} fez — e são <b>dois</b> leitores em pacotes diferentes (o DANFE A4, em
+     * {@code DocumentoFiscalConsultaService}, e o cupom da NFC-e, em {@code PdvVendaService}).
+     * Cada um com a sua cópia é a divergência silenciosa que o javadoc da classe já descreve: no
+     * dia em que uma entidade nova entrar no escape, só um dos dois desfaz, e o papel sai com
+     * {@code &amp;amp;} no meio da observação do lojista.
+     *
+     * <p>⚠️ A ordem importa: {@code &amp;amp;} vem por <b>último</b>. Desfazê-lo antes
+     * transformaria {@code &amp;amp;lt;} — que representa o texto literal "&amp;lt;" — em "&lt;".
+     */
+    public static String desescapar(String valor) {
+        if (valor == null) {
+            return null;
+        }
+        return valor.replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&amp;", "&");
     }
 
     /**

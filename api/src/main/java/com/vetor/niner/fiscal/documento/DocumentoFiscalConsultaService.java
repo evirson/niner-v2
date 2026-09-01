@@ -268,11 +268,10 @@ public class DocumentoFiscalConsultaService {
      */
     private static String informacoesComplementares(LinhaDanfe cab) {
         if (cab.infCpl != null && !cab.infCpl.isBlank()) {
-            return cab.infCpl
-                    .replace("&lt;", "<").replace("&gt;", ">")
-                    .replace("&quot;", "\"").replace("&apos;", "'")
-                    // &amp; por último: fazê-lo antes transformaria "&amp;lt;" em "<".
-                    .replace("&amp;", "&");
+            // ⭐ O desescape mora em XmlFiscal, junto do escape que ele desfaz (2026-09-01): o
+            // cupom da NFC-e passou a ler o mesmo campo, e duas cópias divergiriam no dia em que
+            // uma entidade nova entrasse só numa delas.
+            return XmlFiscal.desescapar(cab.infCpl);
         }
         return cab.chaveReferenciada != null
                 ? "Devolucao referente a nota fiscal " + cab.chaveReferenciada

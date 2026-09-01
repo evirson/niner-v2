@@ -490,6 +490,71 @@ class VendaFiscalEmissaoTest {
                 .andExpect(jsonPath("$.dadosFiscais.valorTotalTributos").value(38.00));
     }
 
+    /**
+     * ⭐ O {@code dhEmi} é o instante da EMISSÃO, nunca o da venda (2026-09-01).
+     *
+     * <p><b>O defeito que este teste prende</b> era real e estava em produção de homologação: o
+     * assembler mandava {@code venda.dataVenda()}, e a SEFAZ recusava com <b>{@code cStat 704} —
+     * "NFC-e com Data-Hora de emissão atrasada. Tolerância de até 5 minutos"</b>. Medido na venda
+     * 628: três tentativas, todas com {@code dhEmi 19:54:34}, as de 20:38 e 20:40 rejeitadas —
+     * e <b>cada uma queimou um número</b>.
+     *
+     * <p>⚠️ Não atingia só a retransmissão: a loja com {@code cfg_emite_fiscal_apos_venda}
+     * desligado emite depois <b>por escolha</b>, e ali toda nota nasceria rejeitada.
+     *
+     * <p>O teste envelhece a venda em 3 horas — bem além da tolerância de 5 minutos — e exige que
+     * o XML declare <b>hoje</b>. ⚠️ A asserção é sobre o XML gravado, não sobre o que o serviço
+     * devolveu: é o {@code dhEmi} do documento assinado que a SEFAZ lê.
+     */
+    @Test
+    void vendaAntigaEmiteComADataDeHojeNaoComADaVenda() throws Exception {
+        String token = assinarNovoTenant("dhemi");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "11222333000181";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscal(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO DHEMI", idPerfil, "30.00");
+        long idCliente = criarClienteAnonimo(token, "Cliente DhEmi");
+        long idFuncionario = criarFuncionario(token, "Vendedor DhEmi");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "30.00");
+
+        // A venda passou a ser de 3 horas atrás — o cenário da loja que emite depois, e o da
+        // retransmissão após falha.
+        jdbc.sql("UPDATE venda SET data_venda = now() - interval '3 hours' "
+                        + "WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).update();
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk());
+
+        String dhEmi = jdbc.sql("""
+                        SELECT substring(xml_assinado from '<dhEmi>(.{19})')
+                          FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_venda = ?
+                        """)
+                .params(idTenant, idVenda).query(String.class).single();
+
+        String hoje = java.time.LocalDate.now(com.vetor.niner.comum.tempo.FusoDaUf.de("PR")).toString();
+        assertThat(dhEmi)
+                .as("dhEmi com a hora da VENDA volta cStat 704 quando a emissão passa de 5 minutos")
+                .startsWith(hoje);
+        assertThat(java.time.LocalTime.parse(dhEmi.substring(11)))
+                .as("três horas atrás seria a hora da venda, não a da emissão")
+                .isAfter(java.time.LocalTime.now(com.vetor.niner.comum.tempo.FusoDaUf.de("PR"))
+                        .minusMinutes(5));
+    }
+
     /** F12: sem fiscal ligado, o endpoint não devolve corpo e nada é gravado — como se o módulo
      *  fiscal não existisse. A venda em si (já efetivada antes deste passo) não é afetada. */
     @Test
@@ -1076,8 +1141,9 @@ class VendaFiscalEmissaoTest {
         mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        // Observação COM quebra de linha e espaços repetidos, de propósito.
-                        .content("{\"incluirCpf\":false,\"observacao\":\"Entrega\\nsexta   14h\"}"))
+                        // Observação COM quebra de linha e espaços repetidos, de propósito — e com
+                        // um "&", que a montagem escapa e a leitura precisa desfazer.
+                        .content("{\"incluirCpf\":false,\"observacao\":\"Entrega\\nsexta   14h - P&G\"}"))
                 .andExpect(status().isOk());
 
         String infCpl = jdbc.sql("""
@@ -1094,7 +1160,7 @@ class VendaFiscalEmissaoTest {
                 .contains("FORMA PGTO: DINHEIRO")
                 .contains("VENDEDOR: " + idFuncionario + "-VENDEDOR INFCPL")
                 .as("a observação do operador entra no XML, não só no papel")
-                .contains("OBS.: Entrega sexta 14h")
+                .contains("OBS.: Entrega sexta 14h - P&amp;G")
                 // ⚠️ Este produto não tem alíquota IBPT cadastrada, então o total de tributos é
                 // ZERO — e a linha da Lei 12.741 NÃO sai. É desenho, não esquecimento: "valor
                 // aproximado dos tributos: R$ 0,00" seria pior que a ausência, porque afirma um
@@ -1103,9 +1169,21 @@ class VendaFiscalEmissaoTest {
                 .as("com tributos zerados a linha da Lei 12.741 não pode aparecer")
                 .doesNotContain("Valor aproximado dos tributos");
 
-        // ⚠️ A leitura pelo DANFE — a outra ponta, e a que faltava — é conferida em
-        // vendaAContribuinteSaiEmNfe55ComEnderecoESemQrCode, porque o endpoint do DANFE recusa a
-        // NFC-e com 409 (o documento dela é o cupom). Esta venda é de consumidor.
+        // ⭐ A OUTRA PONTA — e ela estava aberta até 2026-09-01. O DANFE A4 passou a ler o
+        // `infCpl`, e o CUPOM da NFC-e continuou remontando no React um texto PARECIDO: a
+        // observação que o operador digita ia para a SEFAZ e não saía no papel que o consumidor
+        // leva. Medido na NFC-e nº 62, emitida em homologação — não deduzido lendo o código.
+        //
+        // ⚠️ A asserção do "&" é o que prende o DESESCAPE: o XML guarda `P&amp;G` (conferido
+        // acima) e o comprovante tem de devolver `P&G`. Sem isso, o cupom imprimiria a entidade
+        // literal, defeito que só aparece quando alguém digita "&" na observação.
+        mvc.perform(get("/api/v1/pdv/vendas/" + idVenda + "/comprovante")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dadosFiscais.informacoesComplementares")
+                        .value(org.hamcrest.Matchers.containsString("OBS.: Entrega sexta 14h - P&G")))
+                .andExpect(jsonPath("$.dadosFiscais.informacoesComplementares")
+                        .value(org.hamcrest.Matchers.containsString("CONTRATO: " + idVenda)));
     }
 
     private int proximoNumero(long idTenant, long idEmpresa) {
