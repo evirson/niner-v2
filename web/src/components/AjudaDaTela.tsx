@@ -907,6 +907,10 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"F6 Efetiva Venda" abre a Forma de Pagamento: escolha Cliente e Vendedor (os dois são obrigatórios; numa venda vinda de orçamento eles já vêm fixos), aplique um desconto (até o máximo definido em Parâmetros do Sistema) e lance uma ou mais formas de pagamento — dinheiro, cartão, crediário ou vale-mercadoria — até fechar o valor a pagar.',
       'Se "Emitir NFC-e/NF-e automaticamente após a venda" estiver ligado (Parâmetros do Sistema), o popup pergunta primeiro os dados do cliente/valor/formas de pagamento e se o CPF do cliente entra na nota — depois de responder, emite na hora e a Papeleta de Venda aparece já como cupom fiscal (DANFCE) quando a SEFAZ autoriza, pronta para imprimir, salvar em PDF ou enviar por WhatsApp.',
       'Desligado, o popup mostra direto a papeleta de venda (não fiscal), com um botão "Emitir Nota Fiscal" que abre a mesma pergunta de CPF quando o operador quiser emitir.',
+      'Venda com SERVIÇO emite dois documentos diferentes, e o mesmo botão cuida dos dois: as mercadorias saem em NFC-e/NF-e (ICMS, estadual) e cada serviço sai em NFS-e (ISS, municipal). As notas de serviço aparecem listadas embaixo da papeleta, uma linha por nota, com o número quando o Sefin autoriza.',
+      'São VÁRIAS notas de serviço quando a venda tem códigos de serviço diferentes — banho e tosa numa, consulta veterinária noutra. Não é erro: cada código tem alíquota e cidade de recolhimento próprias, e a lei não deixa somar os dois numa nota só.',
+      'Venda SÓ de serviço não gera NFC-e nenhuma, e isso está certo: NFC-e é documento de mercadoria. A mensagem verde dizendo isso não é falha — o documento dessa venda é a NFS-e.',
+      'Se a NFS-e não estiver ligada (Fiscal › Configuração da NFS-e), aparece um aviso em vermelho com o valor exato dos serviços que ficaram SEM documento fiscal. Ele fica na tela de propósito, porque continua valendo depois que você fecha o popup.',
     ],
     errosComuns: [
       'Sem caixa aberto no dia, nenhuma venda é efetivada — abra o caixa antes de lançar produtos.',
