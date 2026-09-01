@@ -158,15 +158,44 @@ houver configuração, `emite_nfse` é `false` e nada sai.
 
 **Ação:** configurar em Fiscal › NFS-e (a tela existe, é a entrega do Evirson).
 
-### 78. 🟢 Ligar a emissão de NFS-e pelo PDV — trabalho meu, esperando seu ok
-É a segunda metade da **72**. A máquina está pronta e emitiu em produção; falta o chamador na venda.
-⚠️ **Tem uma decisão de produto embutida:** *uma NFS-e por código de serviço distinto da venda* —
-banho e tosa + consulta veterinária na mesma venda geram **duas** notas, o que **quebra** a
-invariante "uma nota por venda" que a V082 fixou para a NFC-e. Está escrito na spec dele; confirme
-antes de eu ligar.
+### 78. ✅ O PDV emite a NFS-e — **FECHADO em 2026-09-01** (ele confirmou a regra)
+Regra confirmada por ele nesta data: **uma NFS-e por código de serviço distinto da venda**. Banho e
+tosa (`050801`) + consulta veterinária (`050101`) na mesma venda geram **duas** notas — quebrando,
+aqui, a invariante "uma nota por venda" que a V082 fixou para a NFC-e. É consequência do leiaute
+(a DPS carrega um `cServ` só) e não uma escolha de implementação.
 
-**Enquanto não estiver ligado**, a venda mista **avisa** o que ficou de fora (feito hoje): *"Esta
-venda tem R$ X em SERVIÇOS, que não entram na NFC-e… emita pelo portal da sua prefeitura."*
+⭐ **O que estava quebrado era maior que o item.** A loja que vende **só serviço** — petshop,
+consultório, o caso normal do módulo — não conseguia emitir documento fiscal **nenhum** pelo caixa:
+o montador da NFC-e descobria tarde que não havia mercadoria e recusava com **409**. Agora o
+`VendaFiscalService` confere `temMercadoriaNaVenda` **antes** e manda a venda direto para a perna da
+NFS-e.
+
+O backend passou a **orquestrar** (P4), em vez de o front decidir o que a venda precisa emitir:
+mercadoria → NFC-e 65 / NF-e 55; serviço → N NFS-e. **Falha de uma perna não derruba a outra** (são
+impostos e autorizadores diferentes), e os 409 preventivos do F11 são **preservados** na mensagem.
+
+**✅ Conferido no navegador** (não só na suíte), com duas vendas de teste no dev:
+
+| Cenário | O que apareceu |
+|---|---|
+| Venda 631, só serviço, NFS-e **desligada** | toast **verde** ("é só de serviços — o documento desta venda é a NFS-e") + aviso persistente com o **valor exato** e o caminho para ligar |
+| Venda 632, dois serviços, NFS-e **ligada** | o bloco **"NOTAS DE SERVIÇO (NFS-E)"** com badge `NAO_EMITIDA` e a mensagem do F11 **inteira**, nomeando os dois produtos e a aba onde resolver |
+
+⭐ E o mais importante do que **não** apareceu: **zero documentos fiscais** gravados para as duas
+vendas — o caminho novo não passa pelo montador da NFC-e, então **nenhum número foi queimado**
+(pendência #76 é exatamente sobre isso).
+
+⚠️ **Dois defeitos meus, achados revisando o próprio desenho antes de testar:** (a) `semMercadoria`
+tinha **uma** frase, que sairia também para a venda que **tem** mercadoria com a NFC-e desligada —
+o operador de loja mista leria que a venda dele não tem mercadoria; (b) escrevi `EMITIDA` e
+`NAO_EMITIDO` no front, e o enum `situacao_nfse` traz `AUTORIZADA` e `NAO_EMITIDA` — não daria erro
+em lugar nenhum, a nota autorizada só sairia **vermelha**.
+
+⛔ **O que continua NÃO medido:** uma NFS-e **autorizada de verdade** saindo pelo PDV. Falta o
+certificado A1 e a configuração da empresa (pendências **#49** e **#77**, bola dele). A config que
+usei para ver a tela foi inserida e **removida** em seguida — o dev voltou ao estado dele.
+
+⚠️ **Ficaram no dev as vendas de teste 631 e 632** (só serviço). Não apago dado sem perguntar.
 ## 🔵 Bola dele (dono do produto)
 
 ### 5. ✅ Tela de Lucratividade — ABERTA em 2026-08-31, e tinha defeito
