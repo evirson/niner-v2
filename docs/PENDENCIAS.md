@@ -722,14 +722,41 @@ IP real no **fim**. Com `confiar-proxy=true` (produção), qualquer um cria um b
 requisição. Sobra o `limit_req` do nginx — 6× o teto pretendido. Ler `X-Real-IP` (o nginx
 sobrescreve) ou o último elemento. **Bola minha.**
 
-### 40. 🟠 Login do backoffice sem teto de tentativas, e com oráculo de tempo 🧪🔵🟢
-`POST /api/admin/sessao` não passa pelo limite de requisição (que cobre só `/api/publico/**`) e não
-tem bloqueio de conta — é a credencial mais valiosa do sistema. E o hash de mentira que deveria dar
-tempo constante tem **63 caracteres** onde o BCrypt exige 60: o `matches` recusa o formato e
-**retorna sem calcular**, então e-mail existente demora ~50-300 ms e inexistente ~1 ms —
-enumeração de staff medível pela internet. 🧪 Um `curl` cronometrado fecha o diagnóstico em
-minutos. **Bola minha** o código; **dele** decidir se restringe o backoffice por IP (o allowlist já
-está escrito e comentado no nginx).
+### 40. ✅ Login do backoffice: teto de tentativas e oráculo de tempo — **FECHADO em 2026-09-01** (V107)
+O oráculo de tempo foi **medido antes e depois**, contra a API rodando — não inferido:
+
+| | e-mail existente | e-mail inexistente |
+|---|---|---|
+| **Antes** | ~50 ms | **~6 ms** |
+| **Depois** | ~50 ms | ~49 ms |
+
+A causa era a prevista: o hash de mentira tinha **63** caracteres onde o BCrypt exige **60**, então
+o `matches` recusava o formato e **retornava sem calcular**. ⭐ Agora ele é **gerado pelo próprio
+encoder** (`senhas.encode(aleatório)`) em vez de digitado — um literal pode nascer malformado de
+novo e **nada falha**: a defesa simplesmente some.
+
+Entrou também o **teto de 5 tentativas / bloqueio de 15 min** (V107, colunas em `plataforma.staff`),
+com o `UPDATE` do contador **fora de transação** — dentro dela o rollback da exceção que informa o
+erro apagaria a tentativa, que é literalmente o defeito do 2FA de 2026-08-27. ⭐ Provado por
+**sabotagem**: devolvendo o `@Transactional`, o contador fica em **0** e os dois testes reprovam.
+E o incremento decide o bloqueio **no mesmo UPDATE**, no banco: ler-somar-gravar em Java deixaria
+cinco requisições simultâneas lendo 0 e o teto nunca chegaria.
+
+Testes: `LoginStaffTetoDeTentativasTest` (4), com o **caso negativo** — quatro erros **não** bloqueiam
+e conta nova entra na primeira — porque uma suíte só de casos positivos aprovaria um teto que
+trancasse todo mundo.
+
+⚠️ **Duas coisas ficaram declaradas, não escondidas** (javadoc de `StaffService`):
+- o 429 é um **oráculo de existência** que custa 5 tentativas sob limite de IP — troca deliberada
+  pelo de tempo, que custava 1 requisição e era grátis;
+- 🔵 **e a parte que continua sendo decisão dele:** quem souber o e-mail do staff mantém a conta
+  trancada repetindo 5 erros a cada 15 min. O remédio **não é código** — é o allowlist de IP do
+  backoffice, já escrito e comentado no nginx.
+
+⚠️ Correção de um pressuposto do item original: o limite de requisição **já cobria**
+`/api/admin/sessao` (`LimiteRequisicaoFilter.LOGIN_STAFF`, feito em 2026-08-29). O que faltava era o
+teto **por conta** — o balde por IP é em memória e por instância (P6), então reinício da API zera e
+várias origens dividem o mesmo alvo sem estourar o balde de nenhuma.
 
 ### 41. ✅ FECHADO — Módulo fiscal não checava "empresas com acesso"
 24 endpoints recebem `idEmpresa` por path/query sem conferir `usuario_empresa` — as rotas de
