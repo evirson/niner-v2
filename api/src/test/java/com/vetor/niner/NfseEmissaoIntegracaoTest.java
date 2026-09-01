@@ -284,6 +284,121 @@ class NfseEmissaoIntegracaoTest {
         assertThat(erro).contains("Configuração da NFS-e");
     }
 
+    // ---- o PDV emitindo (pendência #78, 2026-09-01) -------------------------------------------
+
+    /**
+     * ⭐ <b>O caso que estava quebrado, e é o normal de petshop e de consultório:</b> uma venda
+     * 100% serviço emitida pelo <b>PDV</b>.
+     *
+     * <p>Até 2026-09-01 este {@code POST} respondia <b>409</b> — o montador da NFC-e descobria que
+     * a venda não tinha mercadoria e recusava com <i>"só tem serviços, imprima a papeleta"</i>. Ou
+     * seja: a loja que vende <b>só serviço</b> não conseguia emitir documento fiscal <b>nenhum</b>
+     * pelo caixa, mesmo com a máquina da NFS-e pronta e já tendo emitido em produção.
+     *
+     * <p>⚠️ A asserção decisiva é a <b>contagem</b>: duas notas, uma por código de serviço. Um
+     * teste que só conferisse o status 200 passaria com uma implementação que emitisse uma nota
+     * só, somando os dois códigos — que é justamente o erro que a regra existe para impedir
+     * (declararia serviço errado para parte do valor, com alíquota e local de incidência errados
+     * junto).
+     */
+    @Test
+    void vendaSoDeServicoEmiteAsNfsePeloPdv() throws Exception {
+        Cenario c = prepararLojaQueVendeDoisServicos("pdv");
+
+        String resp = mvc.perform(post("/api/v1/pdv/vendas/" + c.idVenda() + "/nfce")
+                        .header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<String>read(resp, "$.situacao"))
+                .as("não é falha: esta venda não tem mercadoria, logo não existe NFC-e a emitir")
+                .isEqualTo("SEM_MERCADORIA");
+        assertThat(JsonPath.<List<Object>>read(resp, "$.nfse"))
+                .as("uma NFS-e por código de serviço distinto — banho/tosa e consulta veterinária")
+                .hasSize(2);
+        assertThat(JsonPath.<List<String>>read(resp, "$.nfse[*].situacao"))
+                .containsOnly("AUTORIZADA");
+        assertThat(JsonPath.<Object>read(resp, "$.avisoServicos"))
+                .as("o aviso é sobre o que ficou SEM documento; com a NFS-e emitida ele mentiria")
+                .isNull();
+    }
+
+    /**
+     * ⭐ O caso <b>negativo</b> do mesmo caminho: com a NFS-e desligada, o PDV não pode ficar em
+     * silêncio.
+     *
+     * <p>É o defeito de 2026-08-31 relatado pelo dono do produto — o operador emitia, via o cupom
+     * e ia embora achando que a venda inteira estava documentada. ⚠️ E aqui ele é pior que na
+     * venda mista: <b>não sai documento nenhum</b>, então a mensagem tem de dizer isso, e não
+     * repetir "a nota emitida cobre só as mercadorias" — não há nota.
+     *
+     * <p>⚠️ 200 com aviso, <b>não</b> 204. O 204 é o F12 (fiscal desligado, a tela não mostra
+     * nada) e usá-lo aqui devolveria exatamente o silêncio que este teste existe para impedir.
+     */
+    @Test
+    void vendaDeServicoComNfseDesligadaAvisaEmVezDeSilenciar() throws Exception {
+        Cenario c = prepararLojaQueVendeDoisServicos("pdv-desligado");
+        try (Connection conn = abrirConexao(c.idTenant());
+             Statement st = conn.createStatement()) {
+            st.execute("UPDATE fiscal_config_nfse SET emite_nfse = false");
+        }
+
+        String resp = mvc.perform(post("/api/v1/pdv/vendas/" + c.idVenda() + "/nfce")
+                        .header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<List<Object>>read(resp, "$.nfse")).isEmpty();
+        String aviso = JsonPath.read(resp, "$.avisoServicos");
+        assertThat(aviso)
+                .as("venda 100%% serviço: dizer que 'a nota cobre só as mercadorias' seria mentira")
+                .contains("só de SERVIÇOS")
+                .contains("NÃO saiu documento fiscal nenhum")
+                .contains("230,00")            // 80,00 do banho + 150,00 da consulta
+                .contains("Configuração da NFS-e");
+    }
+
+    /**
+     * Emitir duas vezes pelo PDV não duplica nota — a segunda chamada devolve as mesmas duas,
+     * dizendo que já estão autorizadas.
+     *
+     * <p>⚠️ Prende o comportamento na porta NOVA. A idempotência já estava testada pelo endpoint
+     * de NFS-e ({@code emitirDuasVezesNaoDuplicaANota}), mas quem passou a chamar em produção é o
+     * PDV, e teto que vale num caminho e não no vizinho é a família inteira de
+     * {@code feedback_teto_com_porta_ao_lado}.
+     */
+    @Test
+    void emitirDuasVezesPeloPdvNaoDuplicaAsNotas() throws Exception {
+        Cenario c = prepararLojaQueVendeDoisServicos("pdv-duas");
+        var pedido = post("/api/v1/pdv/vendas/" + c.idVenda() + "/nfce")
+                .header("Authorization", "Bearer " + c.token())
+                .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}");
+
+        mvc.perform(pedido).andExpect(status().isOk());
+        String segunda = mvc.perform(post("/api/v1/pdv/vendas/" + c.idVenda() + "/nfce")
+                        .header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<List<Object>>read(segunda, "$.nfse")).hasSize(2);
+
+        try (Connection conn = abrirConexao(c.idTenant());
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT count(*) FROM nfse_documento WHERE id_venda = ?")) {
+            ps.setLong(1, c.idVenda());
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertThat(rs.getInt(1))
+                        .as("a contagem tem de vir do BANCO: a resposta HTTP repetiria as duas notas "
+                                + "mesmo que quatro tivessem sido gravadas")
+                        .isEqualTo(2);
+            }
+        }
+    }
+
     // ---- utilitários -------------------------------------------------------------------------
 
     private String assinar(String sufixo) throws Exception {

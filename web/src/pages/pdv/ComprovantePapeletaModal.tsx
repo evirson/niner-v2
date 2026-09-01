@@ -19,6 +19,30 @@ import { fecharAoClicarNoFundo } from '../../lib/modais'
  *  (AUTORIZADO) ou vai sair (CONTINGENCIA/EM_PROCESSAMENTO); as outras precisam de atenção. */
 const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMENTO'])
 
+/**
+ * Situações que NÃO são erro para o operador — usado só para escolher a cor do toast.
+ *
+ * ⚠️ Separado de `SITUACOES_SUCESSO` de propósito: aquele conjunto também decide se o DANFE A4
+ * abre, e `SEM_MERCADORIA` não tem DANFE nenhum. Juntar os dois faria a venda 100% serviço tentar
+ * abrir um documento que não existe — é a família de "constante literal onde há campo de domínio",
+ * pelo avesso: um conjunto que responde a duas perguntas diferentes acaba errando uma.
+ */
+const SITUACOES_SEM_ERRO = new Set([...SITUACOES_SUCESSO, 'SEM_MERCADORIA'])
+
+/**
+ * Cor da linha de cada NFS-e, pelos valores REAIS do enum `situacao_nfse` (V102):
+ * RASCUNHO · ASSINADA · TRANSMITINDO · AUTORIZADA · REJEITADA · CANCELADA · NAO_EMITIDA.
+ *
+ * ⚠️ Escrevi `EMITIDA` aqui na primeira versão — valor que não existe. Não daria erro em lugar
+ * nenhum: a nota autorizada simplesmente sairia vermelha. Os nomes vieram do enum, não da memória.
+ */
+function corDaNfse(situacao: string): string {
+  if (situacao === 'AUTORIZADA') return 'badge-sucesso'
+  // Cancelada não é falha: a nota existiu e foi desfeita perante o Sefin.
+  if (situacao === 'CANCELADA' || situacao === 'TRANSMITINDO') return 'badge-aviso'
+  return 'badge-perigo'
+}
+
 /** NF-e — o documento dela e o DANFE em A4, nao o DANFCE termico. Venda a pessoa juridica sai
  *  neste modelo desde 2026-08-24 (a fisica continua em NFC-e, modelo 65). */
 const MODELO_NFE = 55
@@ -135,6 +159,7 @@ export default function ComprovantePapeletaModal({
       mensagem: 'Não foi possível falar com o serviço fiscal. A venda está registrada.',
       // A emissão nem chegou ao servidor, então não há como saber o que ficaria de fora dela.
       avisoServicos: null,
+      nfse: [],
     }
   }
 
@@ -371,6 +396,33 @@ export default function ComprovantePapeletaModal({
             </p>
           )}
 
+          {/* ⭐ As NFS-e da venda (2026-09-01, pendência #78). Uma LINHA POR NOTA porque a DPS
+              carrega um código de serviço só: banho/tosa + consulta veterinária na mesma venda
+              rendem duas notas, com alíquotas e locais de incidência diferentes. Mostrar "a nota
+              de serviço foi emitida", no singular, esconderia justamente a informação que essa
+              regra existe para preservar.
+
+              ⛔ Na TELA, não em toast — e por dois motivos já catalogados aqui: toast some em 6 s
+              e o número da nota continua valendo depois; e dois toasts irmãos disputam o mesmo
+              canto, com o verde cobrindo o vermelho (2026-08-30). O que falhou tem de ficar
+              legível junto do que deu certo. */}
+          {resultadoFiscal && resultadoFiscal.nfse.length > 0 && (
+            <div data-sem-impressao style={{ flexShrink: 0, marginTop: 8 }}>
+              <div className="section-label">Notas de serviço (NFS-e)</div>
+              {resultadoFiscal.nfse.map((nota, i) => (
+                <p
+                  key={nota.idNfse > 0 ? nota.idNfse : `sem-id-${i}`}
+                  style={{ margin: '4px 0', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <span className={`badge ${corDaNfse(nota.situacao)}`}>
+                    {nota.numeroNfse ? `nº ${nota.numeroNfse}` : nota.situacao}
+                  </span>
+                  <span>{nota.mensagem}</span>
+                </p>
+              ))}
+            </div>
+          )}
+
           {!mostrarPerguntaCpf && (
             <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
               <button
@@ -423,7 +475,7 @@ export default function ComprovantePapeletaModal({
       {resultadoFiscal && (
         <Toast
           mensagem={resultadoFiscal.mensagem}
-          tipo={SITUACOES_SUCESSO.has(resultadoFiscal.situacao) ? 'sucesso' : 'erro'}
+          tipo={SITUACOES_SEM_ERRO.has(resultadoFiscal.situacao) ? 'sucesso' : 'erro'}
           aoFechar={() => setResultadoFiscal(null)}
         />
       )}

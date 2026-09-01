@@ -363,6 +363,22 @@ export type SituacaoEmissaoNfce =
   | 'FALHA_COMUNICACAO'
   | 'CONTINGENCIA'
   | 'NAO_EMITIDO'
+  /** ⭐ A venda não tem MERCADORIA — logo não existe NFC-e/NF-e a emitir (2026-09-01). É o caso
+   *  normal de petshop e de consultório, e NÃO é falha: o documento dela é a NFS-e, que vem em
+   *  `nfse` na mesma resposta. Por isso não reaproveita `NAO_EMITIDO`, que a tela pinta de
+   *  vermelho — dizer "não emitida" de um documento que não deveria existir manda o operador
+   *  procurar um defeito que não há. */
+  | 'SEM_MERCADORIA'
+
+/** Uma NFS-e da venda — espelha `NfseEmissaoService.Resultado`. */
+export interface ResultadoNfseDaVenda {
+  idNfse: number
+  situacao: string
+  chaveAcesso: string | null
+  numeroNfse: number | null
+  codigo: string | null
+  mensagem: string
+}
 
 export interface ResultadoEmissaoNfce {
   situacao: SituacaoEmissaoNfce
@@ -374,10 +390,17 @@ export interface ResultadoEmissaoNfce {
   protocolo: string | null
   cStat: string | null
   mensagem: string
-  /** ⭐ Preenchido só quando a venda tem SERVIÇO: a NFC-e cobre apenas as mercadorias, e sem este
-   *  aviso o operador vai embora achando que documentou a venda inteira. Serviço é ISS municipal
-   *  e tem documento próprio (NFS-e), que o PDV ainda não emite. `null` na maioria das vendas. */
+  /** ⭐ O que ficou SEM documento. Desde 2026-09-01 o PDV emite a NFS-e, então este aviso só
+   *  aparece quando a NFS-e está DESLIGADA para a empresa — com ela ligada, uma nota que falha
+   *  aparece em `nfse` com o motivo, e repetir o aviso ali diria que falta configurar algo que já
+   *  está configurado. `null` na esmagadora maioria das vendas. */
   avisoServicos: string | null
+  /** ⭐ As NFS-e da mesma venda (2026-09-01, pendência #78). É uma LISTA porque a DPS carrega UM
+   *  código de serviço: banho/tosa + consulta veterinária na mesma venda rendem DUAS notas, cada
+   *  uma com sua alíquota e local de incidência. Vazia quando a venda não tem serviço ou a NFS-e
+   *  está desligada. Cada nota traz o próprio desfecho — uma falhar não invalida a NFC-e, que é
+   *  documento de outro imposto. */
+  nfse: ResultadoNfseDaVenda[]
 }
 
 /**

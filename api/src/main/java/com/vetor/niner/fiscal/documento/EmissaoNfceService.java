@@ -307,30 +307,59 @@ public class EmissaoNfceService {
                                    /** ⭐ Preenchido só quando a venda tem SERVIÇO (2026-08-31): a NFC-e
                                     *  cobre apenas as mercadorias, e sem este aviso o operador vai
                                     *  embora achando que documentou a venda inteira. `null` na
-                                    *  esmagadora maioria das vendas, e aí a tela não mostra nada. */
-                                   String avisoServicos) {
+                                    *  esmagadora maioria das vendas, e aí a tela não mostra nada.
+                                    *  ⚠️ Desde 2026-09-01 ele fica {@code null} quando a NFS-e é
+                                    *  emitida de fato: o aviso é sobre o que <b>ficou sem
+                                    *  documento</b>, e mantê-lo depois de a nota sair diria ao
+                                    *  operador que falta algo que não falta. */
+                                   String avisoServicos,
+                                   /** ⭐ As NFS-e da mesma venda (2026-09-01, pendência #78). Lista
+                                    *  porque a DPS carrega UM código de serviço: uma venda de
+                                    *  petshop com banho/tosa e consulta veterinária rende DUAS
+                                    *  notas. Vazia quando a venda não tem serviço ou a NFS-e está
+                                    *  desligada para a empresa (F12). ⚠️ Cada nota traz o próprio
+                                    *  desfecho — uma falhar não impede as outras nem invalida a
+                                    *  NFC-e, que é documento de outro imposto. */
+                                   List<com.vetor.niner.fiscal.nfse.NfseEmissaoService.Resultado> nfse) {
 
         /** Cópia com o aviso de serviços fora da nota (2026-08-31) — ver
          *  {@code VendaFiscalService#avisoDeServicosForaDaNota}. */
         public ResultadoEmissao comAvisoServicos(String aviso) {
             return new ResultadoEmissao(situacao, idDocumentoFiscal, chaveAcesso, protocolo, cStat,
-                    mensagem, modelo, aviso);
+                    mensagem, modelo, aviso, nfse);
+        }
+
+        /** Cópia com as NFS-e da venda (2026-09-01, pendência #78). */
+        public ResultadoEmissao comNfse(List<com.vetor.niner.fiscal.nfse.NfseEmissaoService.Resultado> notas) {
+            return new ResultadoEmissao(situacao, idDocumentoFiscal, chaveAcesso, protocolo, cStat,
+                    mensagem, modelo, avisoServicos, notas);
         }
 
         /** Cópia com o modelo preenchido. */
         ResultadoEmissao comModelo(int modelo) {
             return new ResultadoEmissao(situacao, idDocumentoFiscal, chaveAcesso, protocolo, cStat,
-                    mensagem, modelo, avisoServicos);
+                    mensagem, modelo, avisoServicos, nfse);
         }
 
         public enum Situacao {
             AUTORIZADO, REJEITADO, DENEGADO, EM_PROCESSAMENTO, FALHA_COMUNICACAO, CONTINGENCIA,
-            NAO_EMITIDO
+            NAO_EMITIDO,
+            /**
+             * ⭐ A venda não tem <b>mercadoria</b> — logo não existe NFC-e/NF-e a emitir
+             * (2026-09-01, pendência #78). É o caso normal de petshop e de consultório, e
+             * <b>não é falha</b>: o documento dessa venda é a NFS-e, que vem no campo
+             * {@code nfse} do mesmo resultado.
+             *
+             * <p>⚠️ Não reaproveitei {@code NAO_EMITIDO} de propósito: ele significa "a nota
+             * devia sair e não saiu" e a tela o pinta de vermelho. Dizer "não emitida" de um
+             * documento que não deveria existir manda o operador procurar um defeito que não há.
+             */
+            SEM_MERCADORIA
         }
 
         static ResultadoEmissao autorizado(long id, String chave, String protocolo) {
             return new ResultadoEmissao(Situacao.AUTORIZADO, id, chave, protocolo, "100",
-                    "Nota autorizada.", 0, null);
+                    "Nota autorizada.", 0, null, List.of());
         }
 
         /**
@@ -355,19 +384,19 @@ public class EmissaoNfceService {
         static ResultadoEmissao rejeitado(long id, String chave, String cStat, String motivo) {
             return new ResultadoEmissao(Situacao.REJEITADO, id, chave, null, cStat,
                     ("A SEFAZ rejeitou a nota: %s (%s). A venda está registrada; corrija e emita de novo."
-                            + "%s").formatted(motivo, cStat, dicaDoCstat(cStat)), 0, null);
+                            + "%s").formatted(motivo, cStat, dicaDoCstat(cStat)), 0, null, List.of());
         }
 
         static ResultadoEmissao denegado(long id, String chave, String cStat, String motivo) {
             return new ResultadoEmissao(Situacao.DENEGADO, id, chave, null, cStat,
                     ("Nota denegada pela SEFAZ: %s (%s). Este número não pode ser reaproveitado nem "
-                            + "cancelado — a venda continua registrada.").formatted(motivo, cStat), 0, null);
+                            + "cancelado — a venda continua registrada.").formatted(motivo, cStat), 0, null, List.of());
         }
 
         static ResultadoEmissao emProcessamento(long id, String chave, String motivo) {
             return new ResultadoEmissao(Situacao.EM_PROCESSAMENTO, id, chave, null, null,
                     "A SEFAZ recebeu a nota e ainda está processando (%s). Não emita de novo."
-                            .formatted(motivo), 0, null);
+                            .formatted(motivo), 0, null, List.of());
         }
 
         static ResultadoEmissao falhaDeComunicacao(long id, String chave, boolean entrouEmContingencia) {
@@ -377,7 +406,7 @@ public class EmissaoNfceService {
             return new ResultadoEmissao(Situacao.FALHA_COMUNICACAO, id, chave, null, null,
                     entrouEmContingencia
                             ? base + " As próximas vendas sairão em CONTINGÊNCIA automaticamente."
-                            : base, 0, null);
+                            : base, 0, null, List.of());
         }
 
         /**
@@ -389,11 +418,34 @@ public class EmissaoNfceService {
             return new ResultadoEmissao(Situacao.CONTINGENCIA, id, chave, null, null,
                     "Nota emitida em CONTINGÊNCIA — a SEFAZ está fora do ar. O cupom vale e deve ser "
                             + "entregue ao cliente; a nota será transmitida automaticamente quando a "
-                            + "SEFAZ voltar.", 0, null);
+                            + "SEFAZ voltar.", 0, null, List.of());
         }
 
         static ResultadoEmissao naoEmitido(long id, String mensagem) {
-            return new ResultadoEmissao(Situacao.NAO_EMITIDO, id, null, null, null, mensagem, 0, null);
+            return new ResultadoEmissao(Situacao.NAO_EMITIDO, id, null, null, null, mensagem, 0, null, List.of());
+        }
+
+        /**
+         * Venda sem mercadoria: não há NFC-e/NF-e a emitir, e isso <b>não é erro</b>
+         * (2026-09-01, pendência #78). O documento desta venda são as NFS-e, que a mesma resposta
+         * carrega em {@code nfse}.
+         */
+        public static ResultadoEmissao semMercadoria(long idVenda, boolean temMercadoria) {
+            // ⚠️ 0, não null: é a convenção já usada pelo front para "não houve documento"
+            // (`erroDeComunicacao()` faz o mesmo) e o teste `idDocumentoFiscal > 0` que decide se
+            // abre o DANFE continua valendo sem precisar aprender um terceiro caso.
+            //
+            // ⚠️ DUAS causas, duas mensagens — e achei isto revisando o meu próprio desenho antes
+            // de testar. A primeira versão tinha uma frase só ("é só de serviços"), que sairia
+            // TAMBÉM para a venda que TEM mercadoria e está com a NFC-e desligada. O operador de
+            // uma loja mista leria que a venda dele não tem mercadoria, o que é falso e manda o
+            // diagnóstico para o lado errado.
+            return new ResultadoEmissao(Situacao.SEM_MERCADORIA, 0L, null, null, null,
+                    temMercadoria
+                            ? "A NFC-e está desligada para esta empresa — saiu só a nota de serviço."
+                            : "Venda nº " + idVenda + " é só de serviços — NFC-e/NF-e é documento de "
+                                    + "mercadoria. O documento desta venda é a NFS-e.",
+                    0, null, List.of());
         }
 
         public boolean autorizada() {

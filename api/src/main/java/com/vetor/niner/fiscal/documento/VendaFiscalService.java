@@ -2,10 +2,16 @@ package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.fiscal.documento.EmissaoNfceService.ResultadoEmissao;
+import com.vetor.niner.fiscal.nfse.NfseConfigService;
+import com.vetor.niner.fiscal.nfse.NfseEmissaoService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -23,15 +29,22 @@ public class VendaFiscalService {
     /** Modelo da NFC-e — a nota do PDV. A NF-e 55 da devolução não passa por aqui. */
     private static final int MODELO_NFCE = 65;
 
+    private static final Logger log = LoggerFactory.getLogger(VendaFiscalService.class);
+
     private final VendaFiscalAssembler assembler;
     private final EmissaoNfceService emissao;
     private final DocumentoFiscalRepositorio documentos;
+    private final NfseEmissaoService nfseEmissao;
+    private final NfseConfigService nfseConfig;
 
     public VendaFiscalService(VendaFiscalAssembler assembler, EmissaoNfceService emissao,
-            DocumentoFiscalRepositorio documentos) {
+            DocumentoFiscalRepositorio documentos, NfseEmissaoService nfseEmissao,
+            NfseConfigService nfseConfig) {
         this.assembler = assembler;
         this.emissao = emissao;
         this.documentos = documentos;
+        this.nfseEmissao = nfseEmissao;
+        this.nfseConfig = nfseConfig;
     }
 
     /**
@@ -47,9 +60,83 @@ public class VendaFiscalService {
         Integer idUsuario = Integer.parseInt(jwt.getSubject());
 
         exigirVendaSemNota(idEmpresa, idVenda);
-        return assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf)
-                .map(emissao::emitir)
-                .map(r -> r.comAvisoServicos(avisoDeServicosForaDaNota(idEmpresa, idVenda)));
+
+        // ⚠️ Medido ANTES de qualquer emissão, e uma vez só: as duas pernas precisam concordar
+        // sobre o que a venda tem, e duas leituras é onde nasce divergência.
+        boolean temMercadoria = documentos.temMercadoriaNaVenda(idEmpresa, idVenda);
+        BigDecimal valorServicos = documentos.somarServicosDaVenda(idEmpresa, idVenda);
+        boolean temServico = valorServicos != null && valorServicos.signum() > 0;
+
+        // ---------- perna 1: a mercadoria (NFC-e 65 / NF-e 55) ----------
+        // ⭐ Venda 100% serviço NÃO passa pelo montador (2026-09-01). Até aqui ela chegava lá e
+        // levava 409 — "só tem serviços, imprima a papeleta" —, o que impedia o PDV de emitir
+        // QUALQUER documento para o caso normal de petshop e de consultório.
+        Optional<ResultadoEmissao> daMercadoria = temMercadoria
+                ? assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf).map(emissao::emitir)
+                : Optional.empty();
+
+        // ---------- perna 2: os serviços (N NFS-e, uma por código) ----------
+        boolean nfseLigada = temServico
+                && Boolean.TRUE.equals(nfseConfig.buscar(idEmpresa).emiteNfse());
+        List<NfseEmissaoService.Resultado> daNfse = nfseLigada
+                ? emitirServicos(idVenda)
+                : List.of();
+
+        // ---------- o que a tela vai mostrar ----------
+        // ⚠️ O aviso descreve o que ficou SEM documento, e só existe quando a NFS-e está
+        // DESLIGADA. Com ela ligada, uma nota que falha aparece na própria lista `nfse`, com o
+        // motivo — repetir o aviso ali diria que falta configurar algo que já está configurado.
+        String aviso = temServico && !nfseLigada
+                ? avisoDeServicosForaDaNota(valorServicos, temMercadoria)
+                : null;
+
+        if (daMercadoria.isEmpty() && daNfse.isEmpty()) {
+            // Nada saiu. Duas causas, dois desfechos — e confundi-las é o defeito de 26/08
+            // ("40 notas sem XML"), em que duas populações com conselhos opostos viraram um aviso só:
+            //
+            //  (a) a venda não tem serviço nenhum e o fiscal está desligado  → 204, F12: a tela
+            //      não mostra NADA, exatamente como se o módulo fiscal não existisse;
+            //  (b) a venda TEM serviço e a NFS-e está desligada              → resultado com o
+            //      aviso, porque aqui o silêncio é o defeito de 31/08 de novo: parte do
+            //      faturamento sem documento e ninguém para contar ao operador.
+            return aviso == null
+                    ? Optional.empty()
+                    : Optional.of(ResultadoEmissao.semMercadoria(idVenda, temMercadoria).comAvisoServicos(aviso));
+        }
+
+        return Optional.of(daMercadoria
+                .orElseGet(() -> ResultadoEmissao.semMercadoria(idVenda, temMercadoria))
+                .comAvisoServicos(aviso)
+                .comNfse(daNfse));
+    }
+
+    /**
+     * Emite as NFS-e da venda, <b>sem deixar a falha delas derrubar a NFC-e</b>.
+     *
+     * <p>⛔ São impostos diferentes, com autorizadores diferentes: a NFC-e autorizada pela SEFAZ
+     * continua válida se o Sefin recusar a DPS, e o contrário também. Deixar a exceção subir daria
+     * ao operador um erro no lugar do cupom que ele já tem na mão — e a venda já está registrada
+     * (F3).
+     *
+     * <p>⚠️ Os 409 preventivos do {@code VendaNfseAssembler} (F11 — "falta a Inscrição Municipal",
+     * "falta o código de serviço no cadastro") são exatamente o que o operador precisa ler, então
+     * a mensagem é <b>preservada</b> e não trocada por um texto genérico. É a lição de
+     * {@code feedback_front_engole_mensagem_de_erro_do_back}, aplicada do lado do servidor: o
+     * trabalho de escrever a mensagem certa já está feito, seria invisível se eu a substituísse.
+     */
+    private List<NfseEmissaoService.Resultado> emitirServicos(long idVenda) {
+        try {
+            return nfseEmissao.emitirDaVenda(idVenda);
+        } catch (ResponseStatusException e) {
+            String motivo = e.getReason() != null ? e.getReason() : e.getMessage();
+            log.warn("NFS-e da venda {} não emitida: {}", idVenda, motivo);
+            return List.of(new NfseEmissaoService.Resultado(0L, "NAO_EMITIDA", null, null, null, motivo));
+        } catch (RuntimeException e) {
+            log.error("Falha inesperada ao emitir NFS-e da venda {}", idVenda, e);
+            return List.of(new NfseEmissaoService.Resultado(0L, "NAO_EMITIDA", null, null, null,
+                    "Não foi possível emitir a nota de serviço. A venda está registrada; "
+                            + "tente de novo em Fiscal › Documentos Fiscais."));
+        }
     }
 
     /**
@@ -62,26 +149,33 @@ public class VendaFiscalService {
      * corretamente, e a nota da venda 628 saiu com as duas mercadorias e R$ 739,80, sem os R$ 310
      * de serviço. <b>O defeito não era a nota; era o silêncio.</b>
      *
-     * <p>A emissão de NFS-e a partir do PDV ainda não existe (pendência #72 — a máquina está
-     * pronta, falta o chamador). Até lá, o operador clicava em "emitir", via o cupom sair e ia
-     * embora achando que a venda inteira estava documentada — com uma parte do faturamento sem
-     * documento nenhum e ninguém para lhe contar. Um aviso não substitui a NFS-e, mas troca
-     * "ele não sabe" por "ele sabe", que é a diferença que importa numa fiscalização.
+     * <p>⭐ <b>Desde 2026-09-01 (pendência #78) o PDV EMITE a NFS-e</b>, e este aviso mudou de
+     * papel: ele descreve o que ficou <b>sem documento</b>, e só sobra quando a NFS-e está
+     * <b>desligada</b> para a empresa. Com a NFS-e ligada, o serviço sai em nota e o aviso é
+     * {@code null} — mantê-lo diria ao operador que falta algo que não falta, e aviso que aparece
+     * sempre é aviso que ninguém lê.
      *
-     * <p>Devolve {@code null} quando a venda não tem serviço — a esmagadora maioria das vendas —,
-     * e aí a tela não mostra nada.
+     * <p>Enquanto ela estiver desligada, o aviso continua valendo o que valia: troca "ele não
+     * sabe" por "ele sabe", que é a diferença que importa numa fiscalização.
+     *
+     * @param temMercadoria muda a frase, não só o texto: numa venda mista a NFC-e cobriu
+     *         <b>parte</b> do valor; numa venda 100% serviço <b>não saiu documento nenhum</b>, e
+     *         dizer "a nota emitida cobre só as mercadorias" ali seria mentira — não há nota.
      */
-    private String avisoDeServicosForaDaNota(long idEmpresa, long idVenda) {
-        BigDecimal valorServicos = documentos.somarServicosDaVenda(idEmpresa, idVenda);
+    private String avisoDeServicosForaDaNota(BigDecimal valorServicos, boolean temMercadoria) {
         if (valorServicos == null || valorServicos.signum() <= 0) {
             return null;
         }
-        return ("Esta venda tem R$ %s em SERVIÇOS, que não entram na NFC-e — serviço é ISS "
-                + "municipal e tem documento próprio (NFS-e). A nota emitida cobre só as "
-                + "mercadorias. A emissão de NFS-e pelo PDV ainda não está disponível: por "
-                + "enquanto, emita a nota de serviço pelo portal da sua prefeitura.")
-                .formatted(valorServicos.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()
-                        .replace('.', ','));
+        String valor = valorServicos.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()
+                .replace('.', ',');
+        String comum = "Serviço é ISS municipal e tem documento próprio (NFS-e), que está "
+                + "DESLIGADA para esta empresa. Ligue em Fiscal › Configuração da NFS-e, ou emita "
+                + "pelo portal da sua prefeitura.";
+        return temMercadoria
+                ? "Esta venda tem R$ %s em SERVIÇOS, que não entram na NFC-e — a nota emitida cobre "
+                        .formatted(valor) + "só as mercadorias. " + comum
+                : "Esta venda é só de SERVIÇOS (R$ %s) e NÃO saiu documento fiscal nenhum. "
+                        .formatted(valor) + comum;
     }
 
     /**

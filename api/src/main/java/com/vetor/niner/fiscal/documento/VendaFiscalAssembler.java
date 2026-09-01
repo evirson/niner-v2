@@ -127,10 +127,16 @@ public class VendaFiscalAssembler {
             // opostos num aviso só manda o operador resolver o problema errado).
             // Venda 100% serviço TEM itens; o que ela não tem é mercadoria, e NFC-e é documento de
             // ICMS. Dizer "não tem itens" mandaria o operador procurar um item que está na tela.
+            // ⚠️ Desde 2026-09-01 o PDV NÃO chega mais aqui numa venda 100% serviço: o
+            // VendaFiscalService confere `temMercadoriaNaVenda` antes e manda a venda direto para
+            // a perna da NFS-e. Esta mensagem sobrevive para quem chama o montador por outro
+            // caminho (reprocessamento em Documentos Fiscais) — e por isso teve de ser corrigida:
+            // ela ainda dizia que a NFS-e "não é emitida pelo Nainer", o que virou mentira no dia
+            // em que a pendência #78 fechou.
             throw new ResponseStatusException(HttpStatus.CONFLICT, somenteServico(idVenda)
                     ? "Venda nº " + idVenda + " só tem serviços — NFC-e/NF-e é documento de "
-                      + "mercadoria. O documento fiscal de serviço é a NFS-e, que ainda não é "
-                      + "emitida pelo Nainer; imprima a papeleta."
+                      + "mercadoria. O documento fiscal desta venda é a NFS-e: emita pelo PDV, ou "
+                      + "ligue a NFS-e em Fiscal › Configuração da NFS-e."
                     : "Venda nº " + idVenda + " não tem itens — não há o que emitir.");
         }
 

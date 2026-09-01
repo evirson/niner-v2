@@ -118,6 +118,39 @@ public class DocumentoFiscalRepositorio {
      * respondia {@code avisoServicos: null} pela API enquanto a mesma consulta devolvia 310,00 no
      * {@code psql}. Ver [[feedback_repositorio_sem_transactional_tenant_nulo]].
      */
+    /**
+     * A venda tem alguma <b>mercadoria</b>? É o que decide se existe NFC-e/NF-e a emitir.
+     *
+     * <p>Uma venda 100% serviço — o caso normal de petshop e de consultório — não tem documento de
+     * ICMS nenhum: o documento dela é a NFS-e. Antes de 2026-09-01 o montador da NFC-e descobria
+     * isso tarde e respondia 409, o que na prática impedia o PDV de emitir <b>qualquer</b> nota
+     * para essas vendas.
+     *
+     * <p>⚠️ {@code @Transactional} obrigatório, pelo mesmo motivo do método abaixo: sem ele
+     * {@code tenant_atual()} vem NULL, o {@code EXISTS} responde <b>false</b> e o resultado é uma
+     * venda de mercadoria tratada como venda de serviço — falha em silêncio, e para o lado errado.
+     */
+    @Transactional(readOnly = true)
+    public boolean temMercadoriaNaVenda(long idEmpresa, long idVenda) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (
+                          SELECT 1
+                            FROM produto_movimento_mestre m
+                            JOIN produto_movimento_detalhe d
+                              ON d.id_tenant = m.id_tenant AND d.id_movimento = m.id_movimento
+                            JOIN produto_barra pb
+                              ON pb.id_tenant = d.id_tenant AND pb.id_variacao = d.id_variacao
+                            JOIN produto p
+                              ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                           WHERE m.id_tenant = plataforma.tenant_atual()
+                             AND m.id_empresa = ? AND m.id_venda = ?
+                             AND m.tipo_movimento = 'VENDA'
+                             AND p.tipo_item = 'MERCADORIA')
+                        """)
+                .params(idEmpresa, idVenda)
+                .query(Boolean.class).single());
+    }
+
     @Transactional(readOnly = true)
     public java.math.BigDecimal somarServicosDaVenda(long idEmpresa, long idVenda) {
         return jdbc.sql("""
