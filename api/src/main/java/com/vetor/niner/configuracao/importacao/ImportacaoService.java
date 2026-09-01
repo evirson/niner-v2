@@ -44,9 +44,19 @@ public class ImportacaoService {
      *  não existe (ainda não começou, ou já terminou) — não é erro, o front simplesmente ignora. */
     public ProgressoResponse progresso(Jwt jwt, String idProgresso) {
         exigirAdmin(jwt);
-        return progressoRegistry.obter(idProgresso)
+        return progressoRegistry.obter(idTenantDe(jwt), idProgresso)
                 .map(p -> new ProgressoResponse(p.etapa(), p.atual(), p.total()))
                 .orElseGet(() -> new ProgressoResponse("desconhecido", 0, 0));
+    }
+
+    /**
+     * O tenant do token, usado para chavear o progresso (P8).
+     *
+     * <p>⚠️ Vem do <b>claim</b>, nunca do corpo ou do path: o {@code idProgresso} é gerado pelo
+     * navegador e não prova nada sobre quem está perguntando.
+     */
+    private static long idTenantDe(Jwt jwt) {
+        return ((Number) jwt.getClaim("tid")).longValue();
     }
 
     /** Exposto para o endpoint de análise prévia de produto (fora da interface genérica, ver
@@ -114,7 +124,7 @@ public class ImportacaoService {
         exigirAdmin(jwt);
         ImportadorDeTabela importador = localizar(tabela);
         String id = (idProgresso == null || idProgresso.isBlank()) ? UUID.randomUUID().toString() : idProgresso;
-        ProgressoImportacao progresso = progressoRegistry.iniciar(id);
+        ProgressoImportacao progresso = progressoRegistry.iniciar(idTenantDe(jwt), id);
         try {
             return ImportacaoProgressoContext.comProgresso(progresso, () -> {
                 List<LinhaPlanilha> linhas = ImportacaoPlanilha.ler(arquivo);
@@ -137,7 +147,7 @@ public class ImportacaoService {
                 return relatorio;
             });
         } finally {
-            progressoRegistry.finalizar(id);
+            progressoRegistry.finalizar(idTenantDe(jwt), id);
         }
     }
 

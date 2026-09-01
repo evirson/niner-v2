@@ -18,19 +18,30 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class ImportacaoProgressoRegistry {
 
-    private final Map<String, ProgressoImportacao> estados = new ConcurrentHashMap<>();
+    /**
+     * ⚠️ A chave carrega o <b>tenant</b> junto (P8, 2026-09-01). O {@code idProgresso} é gerado
+     * pelo <b>navegador</b> e chega por path — sem o tenant na chave, o admin de um tenant que
+     * conhecesse o id de outro leria o progresso da importação alheia. O que vazava eram três
+     * campos ("importando", atual, total) e o id é um UUID efêmero, então o risco prático era
+     * baixo — mas P8 não tem exceção de tamanho: <b>nenhuma consulta cruza a fronteira</b>, e
+     * fechar aqui custou uma linha.
+     */
+    private record Chave(long idTenant, String idProgresso) {
+    }
 
-    public ProgressoImportacao iniciar(String idProgresso) {
+    private final Map<Chave, ProgressoImportacao> estados = new ConcurrentHashMap<>();
+
+    public ProgressoImportacao iniciar(long idTenant, String idProgresso) {
         ProgressoImportacao progresso = new ProgressoImportacao();
-        estados.put(idProgresso, progresso);
+        estados.put(new Chave(idTenant, idProgresso), progresso);
         return progresso;
     }
 
-    public Optional<ProgressoImportacao> obter(String idProgresso) {
-        return Optional.ofNullable(estados.get(idProgresso));
+    public Optional<ProgressoImportacao> obter(long idTenant, String idProgresso) {
+        return Optional.ofNullable(estados.get(new Chave(idTenant, idProgresso)));
     }
 
-    public void finalizar(String idProgresso) {
-        estados.remove(idProgresso);
+    public void finalizar(long idTenant, String idProgresso) {
+        estados.remove(new Chave(idTenant, idProgresso));
     }
 }

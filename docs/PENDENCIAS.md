@@ -397,9 +397,34 @@ para ver o teste reprovar. Abaixo, o que os dois agentes declararam como não co
   rodada 8 errou em 4 de 4 por colidir com `record` privado homônimo. ⏭️ Ele deveria casar por
   **endpoint**, não por nome — é a melhoria que fecharia o buraco de verdade.
 
+> ✅ **`configuracao/importacao/` LIDO em 2026-09-01** — os 17 arquivos, 2.711 linhas. **Um achado,
+> e o resto é descarte** (o descarte vale tanto: fecha a suspeita em vez de deixá-la aberta).
+>
+> **🔴 O achado — progresso da importação não era isolado por tenant (P8).** O `idProgresso` é
+> gerado pelo **navegador** e chega por path; o registro em memória era chaveado **só por ele**, e
+> `ImportacaoService.progresso` conferia apenas `exigirAdmin`. Um admin de um tenant que conhecesse
+> o id de outro lia o progresso da importação alheia. ⚠️ **O risco prático era baixo e isso precisa
+> ser dito**: o id é um UUID efêmero que só existe durante a requisição, e vazavam três campos
+> (etapa, atual, total). Mas P8 não tem exceção por tamanho, e fechar custou uma linha —
+> `ImportacaoProgressoIsoladoTest` (2 testes, com o caso negativo).
+> ⚠️ **Nenhum teste do projeto tocava o endpoint de progresso** — por isso o gap sobreviveu.
+>
+> **🟢 O que foi conferido e está certo** (era o que eu esperava encontrar quebrado):
+> - **P8 nas consultas**: as cinco que meu primeiro `grep` acusou (`FROM cliente`, `FROM produto`,
+>   `FROM empresa`…) têm `id_tenant = plataforma.tenant_atual()` **na linha seguinte** — o grep é
+>   que era por linha. Falso positivo meu, conferido um a um.
+> - **A auditoria do lote roda DEPOIS do commit** do importador (`loteService.registrar`), que é
+>   exatamente a lição do signup de 18/08 (efeito secundário dentro da transação principal
+>   responde 201 com a conta inexistente).
+> - **O registro de progresso não cresce sem teto**: `finalizar` está num `finally`.
+> - **Sem limite de linhas do arquivo** é **decisão registrada** do dono do produto (2026-08-10),
+>   escrita no próprio código — não é esquecimento.
+>
+> ⛔ **Continua sem cobertura:** o peso em memória de uma planilha muito grande (a leitura carrega
+> todas as linhas numa `List`) — mesmo limite declarado do ZIP de 2.000 XMLs no item 19.
+
 **Código que ninguém leu nas oito rodadas:**
-- **Back:** `configuracao/importacao/` (17 arquivos — o maior bloco descoberto; escreve dado em massa
-  numa transação só), `comum/armazenamento/` (a conferência do prefixo `tenants/{id}` na leitura é
+- **Back:** ~~`configuracao/importacao/`~~ ✅ lido (acima), `comum/armazenamento/` (a conferência do prefixo `tenants/{id}` na leitura é
   **afirmada em doc**, nunca conferida em código), `identidade/permissao/PermissaoInterceptor`,
   `comum/telaconfig`, `comum/arquivocompartilhado`, `configuracao/exportacao`, `cadastros/crm`,
   `estoque/relatorioestoque`, `estoque/relatoriomovimentacao`, `financeiro/relatoriocontaspagar`,
