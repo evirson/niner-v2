@@ -84,21 +84,27 @@ export default function OrdemServicoImpressaoModal({
     <>
       <div className="modal-overlay">
         <div className="modal modal-largo" role="dialog" aria-label={`Ordem de serviço nº ${os.idOrdemServico}`}>
-          <div className="lightbox-topo" style={{ marginBottom: 12 }}>
-            <CabecalhoModal titulo=<>Ordem de Serviço nº {os.idOrdemServico}</> aoFechar={aoFechar} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className={`btn ${formato === 'A4' ? '' : 'ghost'}`} onClick={() => setFormato('A4')}>
-                A4
-              </button>
-              <button
-                type="button"
-                className={`btn ${formato === 'BOBINA' ? '' : 'ghost'}`}
-                onClick={() => setFormato('BOBINA')}
-              >
-                Bobina
-              </button>
-            </div>
-          </div>
+          {/* ⚠️ Sem `lightbox-topo` por fora: o `CabecalhoModal` já é um (2026-09-01) — aninhado,
+              o ✕ saía colado no título em vez de ir para o canto. Ver o irmão em
+              `OrcamentoImpressaoModal`. */}
+          <CabecalhoModal
+            titulo={<>Ordem de Serviço nº {os.idOrdemServico}</>}
+            aoFechar={aoFechar}
+            acoes={
+              <>
+                <button type="button" className={`btn ${formato === 'A4' ? '' : 'ghost'}`} onClick={() => setFormato('A4')}>
+                  A4
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${formato === 'BOBINA' ? '' : 'ghost'}`}
+                  onClick={() => setFormato('BOBINA')}
+                >
+                  Bobina
+                </button>
+              </>
+            }
+          />
 
           <div className="table-wrap" style={{ maxHeight: '58vh' }}>
             {formato === 'BOBINA' ? (

@@ -102,25 +102,31 @@ export default function OrcamentoImpressaoModal({
     <>
       <div className="modal-overlay">
         <div className="modal modal-largo" role="dialog" aria-label={`Orçamento nº ${orcamento.idOrcamento}`}>
-          <div className="lightbox-topo" style={{ marginBottom: 12 }}>
-            <CabecalhoModal titulo=<>Orçamento nº {orcamento.idOrcamento}</> aoFechar={aoFechar} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className={`btn ${formato === 'A4' ? '' : 'ghost'}`}
-                onClick={() => setFormato('A4')}
-              >
-                A4
-              </button>
-              <button
-                type="button"
-                className={`btn ${formato === 'BOBINA' ? '' : 'ghost'}`}
-                onClick={() => setFormato('BOBINA')}
-              >
-                Bobina
-              </button>
-            </div>
-          </div>
+          {/* ⚠️ Sem `lightbox-topo` por fora: o `CabecalhoModal` já é um (2026-09-01). Aninhado,
+              ele encolhia ao conteúdo e o ✕ saía colado no título em vez de ir para o canto — o
+              seletor de formato entra por `acoes`, que é o lugar previsto para isto. */}
+          <CabecalhoModal
+            titulo={<>Orçamento nº {orcamento.idOrcamento}</>}
+            aoFechar={aoFechar}
+            acoes={
+              <>
+                <button
+                  type="button"
+                  className={`btn ${formato === 'A4' ? '' : 'ghost'}`}
+                  onClick={() => setFormato('A4')}
+                >
+                  A4
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${formato === 'BOBINA' ? '' : 'ghost'}`}
+                  onClick={() => setFormato('BOBINA')}
+                >
+                  Bobina
+                </button>
+              </>
+            }
+          />
 
           <div className="table-wrap" style={{ maxHeight: '58vh' }}>
             {formato === 'BOBINA' ? (

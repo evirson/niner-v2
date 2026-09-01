@@ -304,25 +304,36 @@ export default function OrcamentoLista() {
             aria-label={`Orçamento nº ${detalhe.idOrcamento}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="lightbox-topo" style={{ marginBottom: 12 }}>
-              <div className="titulo-tela">
-                <CabecalhoModal titulo=<>Orçamento nº {detalhe.idOrcamento}</> aoFechar={() => setDetalhe(null)} />
-                <span className={CLASSE_SITUACAO[detalhe.situacao]}>{ROTULO_SITUACAO[detalhe.situacao]}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {/* ⛔ Cancelar orçamento cobra a ação EXCLUIR no servidor (V096) — "desfazer é
-                    excluir". Sem esta guarda o botão aparecia para quem só recebeu "acessar" e
-                    "incluir", e o 403 só chegava depois de digitar o motivo. */}
-                {detalhe.situacao === 'ABERTO' && acoes.excluir && (
-                  <button type="button" className="btn ghost" onClick={() => setCancelando(detalhe)}>
-                    Cancelar orçamento
+            {/* ⚠️ O `CabecalhoModal` JÁ É um `lightbox-topo` inteiro — título à esquerda, ✕ no
+                canto direito (2026-09-01). Aninhá-lo dentro de outro `lightbox-topo` o transformava
+                num flex item que encolhe ao conteúdo: sem espaço para distribuir, o
+                `justify-content: space-between` dele não fazia nada e o ✕ saía COLADO no título, no
+                meio do cabeçalho — visto na tela, não deduzido. O badge e os botões entram pelo
+                `titulo` e pelo `acoes`, que existem exatamente para isso. */}
+            <CabecalhoModal
+              titulo={
+                <span className="titulo-tela">
+                  Orçamento nº {detalhe.idOrcamento}
+                  <span className={CLASSE_SITUACAO[detalhe.situacao]}>{ROTULO_SITUACAO[detalhe.situacao]}</span>
+                </span>
+              }
+              aoFechar={() => setDetalhe(null)}
+              acoes={
+                <>
+                  {/* ⛔ Cancelar orçamento cobra a ação EXCLUIR no servidor (V096) — "desfazer é
+                      excluir". Sem esta guarda o botão aparecia para quem só recebeu "acessar" e
+                      "incluir", e o 403 só chegava depois de digitar o motivo. */}
+                  {detalhe.situacao === 'ABERTO' && acoes.excluir && (
+                    <button type="button" className="btn ghost" onClick={() => setCancelando(detalhe)}>
+                      Cancelar orçamento
+                    </button>
+                  )}
+                  <button type="button" className="btn ghost" onClick={() => setImprimindo(detalhe)}>
+                    Imprimir / WhatsApp
                   </button>
-                )}
-                <button type="button" className="btn ghost" onClick={() => setImprimindo(detalhe)}>
-                  Imprimir / WhatsApp
-                </button>
-              </div>
-            </div>
+                </>
+              }
+            />
 
             <p className="muted" style={{ marginTop: 0 }}>
               {detalhe.nomeCliente} · Vendedor {detalhe.nomeFuncionario} · Emitido em{' '}

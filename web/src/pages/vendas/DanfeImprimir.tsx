@@ -88,6 +88,8 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
         </div>
       </div>
 
+      {/* ⚠️ `d.homologacao &&`: o aviso existe SÓ na nota de homologação (decisão dele,
+          2026-09-01) — numa nota de produção ele seria falso e sujaria o documento que vale. */}
       {d.homologacao && (
         <>
           {/* ⭐ MARCA D'ÁGUA em diagonal, como no modelo que ele mandou (2026-09-01). O texto é o
@@ -99,14 +101,13 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
               feedback_impressao_background_nao_sai; `print-color-adjust: exact` no CSS é o par
               obrigatório disso.
 
-              ⚠️ `aria-hidden`: a tarja logo abaixo já diz a mesma coisa em texto normal, e um
-              leitor de tela lendo as duas repetiria o aviso. */}
-          <div className="danfe-marca-dagua" aria-hidden="true">
-            NFe sem Valor Fiscal - Homologação
-          </div>
-          <div className="danfe-tarja-homologacao">
-            NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO — SEM VALOR FISCAL
-          </div>
+              ⚠️ A tarja horizontal que existia aqui SAIU (2026-09-01, decisão dele): o modelo que
+              ele mandou traz só a marca d'água, e as duas juntas diziam a mesma coisa duas vezes.
+              Com isso a marca d'água passou a ser o ÚNICO aviso — por isso ela perdeu o
+              `aria-hidden`, que só fazia sentido enquanto a tarja repetia o texto para quem usa
+              leitor de tela. Esconder o único aviso de "sem valor fiscal" seria trocar uma
+              repetição por uma omissão. */}
+          <div className="danfe-marca-dagua">NFe sem Valor Fiscal - Homologação</div>
         </>
       )}
 

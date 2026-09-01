@@ -286,24 +286,31 @@ function CodigoCard({
   const [codigo, setCodigo] = useState('')
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
-  const [carregando, setCarregando] = useState(false)
+  // ⚠️ DOIS estados, não um (2026-09-01): com um `carregando` só, clicar em "Reenviar código"
+  // fazia o botão de baixo dizer "Conferindo…" — a tela anunciando uma ação que não estava
+  // acontecendo, bem no momento em que o usuário já não sabe se o código chegou. Cada ação diz o
+  // que ela faz; as duas continuam travando a outra, que é o que evita conferir um código enquanto
+  // um novo está sendo gerado.
+  const [conferindo, setConferindo] = useState(false)
+  const [reenviando, setReenviando] = useState(false)
+  const ocupado = conferindo || reenviando
 
   const conferir = async (valor: string) => {
     setErro('')
-    setCarregando(true)
+    setConferindo(true)
     try {
       await aoConferir(valor)
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível conferir o código.')
       setCodigo('')
     } finally {
-      setCarregando(false)
+      setConferindo(false)
     }
   }
 
   const reenviar = async () => {
     setErro('')
-    setCarregando(true)
+    setReenviando(true)
     try {
       await aoReenviar()
       setCodigo('')
@@ -311,7 +318,7 @@ function CodigoCard({
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível reenviar o código.')
     } finally {
-      setCarregando(false)
+      setReenviando(false)
     }
   }
 
@@ -359,11 +366,11 @@ function CodigoCard({
           código novo" enquanto o contador de tentativas andava para o teto. O erro vence. */}
         {!erro && aviso && <Toast mensagem={aviso} tipo="sucesso" aoFechar={() => setAviso('')} />}
 
-        <button className="btn" type="submit" disabled={carregando || codigo.length < 4} style={{ width: '100%', marginTop: 12 }}>
-          {carregando ? 'Conferindo…' : 'Entrar'}
+        <button className="btn" type="submit" disabled={ocupado || codigo.length < 4} style={{ width: '100%', marginTop: 12 }}>
+          {conferindo ? 'Conferindo…' : 'Entrar'}
         </button>
-        <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 8 }} disabled={carregando} onClick={reenviar}>
-          Reenviar código
+        <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 8 }} disabled={ocupado} onClick={reenviar}>
+          {reenviando ? 'Enviando…' : 'Reenviar código'}
         </button>
         <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 8 }} onClick={aoVoltar}>
           Voltar
