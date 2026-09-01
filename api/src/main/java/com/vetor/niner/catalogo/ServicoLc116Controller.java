@@ -23,6 +23,14 @@ import java.util.List;
  *       "conserto", "cabeleireiro"; a lista inteira fica atrás disso.</li>
  * </ol>
  *
+ * <p>⚠️ <b>A busca varre {@code termos_busca} junto com a descrição (V108, 2026-09-01)</b>, e sem
+ * isso ela não cumpria a promessa do item 2: <b>a lei não usa as palavras do lojista</b>. Medido
+ * contra a API — "tosa" devolvia <b>zero</b> (sendo o exemplo do próprio placeholder!), "manicure"
+ * zero (na lei é "manicuros"), "cabelo" zero ("cabeleireiros" não contém "cabelo"), e "banho"
+ * devolvia <b>o código errado</b> para petshop (060301, banhos e sauna de gente), porque o 050801
+ * fala em "embelezamento". O resultado real: os 5 serviços do tenant de teste ficaram <b>sem
+ * código</b>, e o defeito só apareceu no balcão, com a OS faturada e a nota sem sair.
+ *
  * <p>⚠️ A tabela é GLOBAL (sem {@code id_tenant}, sem RLS) — é a lista da União, igual para todos.
  * Por isso não há filtro de tenant nestas consultas, e é a exceção documentada, não descuido.
  *
@@ -61,7 +69,8 @@ public class ServicoLc116Controller {
                         SELECT codigo, descricao, local_incidencia::text AS local_incidencia,
                                grupo_dps
                           FROM cfg_servico_lc116
-                         WHERE unaccent_imutavel(lower(descricao)) LIKE '%' || unaccent_imutavel(lower(?)) || '%'
+                         WHERE unaccent_imutavel(lower(descricao || ' ' || COALESCE(termos_busca, '')))
+                               LIKE '%' || unaccent_imutavel(lower(?)) || '%'
                             OR (? <> '' AND codigo LIKE ? || '%')
                          ORDER BY codigo
                          LIMIT 50
