@@ -4,6 +4,7 @@ import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService.CertificadoParaAssinatura;
 import com.vetor.niner.fiscal.documento.FiscalNumeracaoService.NumeroReservado;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DevolucaoParaMontar;
+import com.vetor.niner.fiscal.documento.MontagemNfceDtos.AmbienteSefaz;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.XmlMontado;
 import com.vetor.niner.fiscal.sefaz.SefazAutorizadorService;
 import com.vetor.niner.fiscal.sefaz.SefazDtos.FalhaDeComunicacaoException;
@@ -96,7 +97,8 @@ public class EmissaoNfeDevolucaoService {
         KeyStore keystore = abrir(certificado);
 
         // ---------- 1. numeração — transação curta e própria (F4) ----------
-        NumeroReservado numero = numeracao.reservar(idEmpresa, MODELO_NFE, base.serie());
+        NumeroReservado numero = numeracao.reservar(idEmpresa, MODELO_NFE, base.serie(),
+                base.ambiente() == AmbienteSefaz.PRODUCAO);
 
         // ---------- 2. montar, assinar e validar — nenhum I/O de rede ----------
         DevolucaoParaMontar dev = comNumeracao(base, numero);
@@ -137,7 +139,8 @@ public class EmissaoNfeDevolucaoService {
         CertificadoParaAssinatura certificado = certificados.carregarAtivoParaAssinatura(idEmpresa);
         KeyStore keystore = abrir(certificado);
 
-        NumeroReservado numero = numeracao.reservar(idEmpresa, MODELO_NFE, base.serie());
+        NumeroReservado numero = numeracao.reservar(idEmpresa, MODELO_NFE, base.serie(),
+                base.ambiente() == AmbienteSefaz.PRODUCAO);
         DevolucaoParaMontar dev = comNumeracao(base, numero);
         XmlMontado montado = montador.montar(dev);
         String xmlAssinado = assinador.assinar(montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());

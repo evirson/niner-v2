@@ -154,7 +154,8 @@ public class EmissaoNfceService {
         // ---------- 1. numeração — transação curta e própria (F4) ----------
         // ⚠️ Numeração é por (empresa, modelo, série): a NF-e 55 tem sequência PRÓPRIA, e é por
         // isso que o modelo entra aqui em vez do MODELO_NFCE fixo.
-        NumeroReservado numero = numeracao.reservar(pedido.idEmpresa(), modelo, serie);
+        NumeroReservado numero = numeracao.reservar(pedido.idEmpresa(), modelo, serie,
+                pedido.ambiente() == AmbienteSefaz.PRODUCAO);
 
         // ---------- 2. montar, assinar e validar — nenhum I/O de rede ----------
         XmlMontado montado = montador.montar(

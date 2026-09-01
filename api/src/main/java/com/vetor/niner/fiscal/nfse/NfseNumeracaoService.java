@@ -44,18 +44,31 @@ public class NfseNumeracaoService {
 
     /** Reserva e devolve o próximo {@code nDPS} da série daquela empresa. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public long reservar(long idEmpresa, int serie) {
+    public long reservar(long idEmpresa, int serie, boolean producao) {
         return jdbc.sql("""
-                        INSERT INTO nfse_numeracao (id_tenant, id_empresa, serie, proximo_numero)
-                        VALUES (plataforma.tenant_atual(), ?, ?, 2)
-                        ON CONFLICT (id_tenant, id_empresa, serie) DO UPDATE
+                        INSERT INTO nfse_numeracao (id_tenant, id_empresa, serie, ambiente, proximo_numero)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?::ambiente_fiscal, 2)
+                        ON CONFLICT (id_tenant, id_empresa, serie, ambiente) DO UPDATE
                             SET proximo_numero = nfse_numeracao.proximo_numero + 1,
                                 atualizado_em  = now()
                         RETURNING proximo_numero - 1
                         """)
-                .params(idEmpresa, serie)
+                .params(idEmpresa, serie, ambienteDe(producao))
                 .query(Long.class)
                 .single();
+    }
+
+    /**
+     * ⭐ <b>Homologação e produção têm sequências SEPARADAS no SEFIN</b> (V106, 2026-08-31), cada
+     * uma começando do 1. Até aqui a numeração era uma só, e <b>cada NFS-e de teste queimava um
+     * nDPS de produção</b> — o mesmo defeito que a NFC-e tinha, e que já cobrou o preço: a emissão
+     * de teste da nota 7308 consumiu o {@code nDPS 2001000} do CNPJ da Vetor.
+     *
+     * <p>⚠️ O parâmetro é obrigatório de propósito: mudar a assinatura fez o <b>compilador</b>
+     * apontar cada chamador, em vez de deixar algum herdar o ambiente errado em silêncio.
+     */
+    private static String ambienteDe(boolean producao) {
+        return producao ? "PRODUCAO" : "HOMOLOGACAO";
     }
 
     /**
@@ -66,14 +79,15 @@ public class NfseNumeracaoService {
      * repositório, e o padrão desde a auditoria de 2026-08-08 é escrever o filtro.
      */
     @Transactional(readOnly = true)
-    public long ultimoNumeroUsado(long idEmpresa, int serie) {
+    public long ultimoNumeroUsado(long idEmpresa, int serie, boolean producao) {
         return jdbc.sql("""
                         SELECT proximo_numero FROM nfse_numeracao
                          WHERE id_tenant = plataforma.tenant_atual()
                            AND id_empresa = ?
                            AND serie = ?
+                           AND ambiente = ?::ambiente_fiscal
                         """)
-                .params(idEmpresa, serie)
+                .params(idEmpresa, serie, ambienteDe(producao))
                 .query(Long.class)
                 .optional()
                 .orElse(1L) - 1;
@@ -88,20 +102,20 @@ public class NfseNumeracaoService {
      * erro só apareceria na emissão seguinte.
      */
     @Transactional
-    public long avancarPara(long idEmpresa, int serie, long proximoNumero) {
+    public long avancarPara(long idEmpresa, int serie, long proximoNumero, boolean producao) {
         if (proximoNumero < 1) {
             throw new IllegalArgumentException("O próximo número da DPS não pode ser menor que 1");
         }
         return jdbc.sql("""
-                        INSERT INTO nfse_numeracao (id_tenant, id_empresa, serie, proximo_numero)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?)
-                        ON CONFLICT (id_tenant, id_empresa, serie) DO UPDATE
+                        INSERT INTO nfse_numeracao (id_tenant, id_empresa, serie, ambiente, proximo_numero)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?::ambiente_fiscal, ?)
+                        ON CONFLICT (id_tenant, id_empresa, serie, ambiente) DO UPDATE
                             SET proximo_numero = GREATEST(nfse_numeracao.proximo_numero,
                                                           EXCLUDED.proximo_numero),
                                 atualizado_em  = now()
                         RETURNING proximo_numero
                         """)
-                .params(idEmpresa, serie, proximoNumero)
+                .params(idEmpresa, serie, ambienteDe(producao), proximoNumero)
                 .query(Long.class)
                 .single();
     }

@@ -39,6 +39,22 @@ public class FiscalNumeracaoService {
     }
 
     /**
+     * ⭐ <b>Homologação e produção têm sequências SEPARADAS</b> (V106, 2026-08-31).
+     *
+     * <p>A SEFAZ mantém bases distintas para os dois ambientes, cada uma começando do 1. Até aqui a
+     * numeração era uma só: <b>cada nota de teste queimava um número de produção</b>. Medido neste
+     * banco no dia — a NFC-e de homologação estava no 58, então a primeira nota real sairia com 59,
+     * e os números 1 a 58, que a SEFAZ de produção nunca viu, virariam buraco de numeração e
+     * obrigação de inutilização formal.
+     *
+     * <p>⚠️ O parâmetro é obrigatório de propósito: mudar a assinatura fez o <b>compilador</b>
+     * apontar os três chamadores, em vez de deixar um deles herdar o ambiente errado em silêncio.
+     */
+    private static String ambienteDe(boolean producao) {
+        return producao ? "PRODUCAO" : "HOMOLOGACAO";
+    }
+
+    /**
      * Reserva o próximo número da série e devolve o que foi reservado.
      *
      * <p>{@code INSERT … ON CONFLICT DO UPDATE … RETURNING} resolve num só comando os dois casos
@@ -47,16 +63,16 @@ public class FiscalNumeracaoService {
      * naturalmente, sem {@code SELECT … FOR UPDATE} explícito e sem janela entre ler e gravar.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public NumeroReservado reservar(long idEmpresa, int modelo, int serie) {
+    public NumeroReservado reservar(long idEmpresa, int modelo, int serie, boolean producao) {
         Integer numero = jdbc.sql("""
-                        INSERT INTO fiscal_numeracao (id_tenant, id_empresa, modelo, serie, proximo_numero)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?, 2)
-                        ON CONFLICT (id_tenant, id_empresa, modelo, serie) DO UPDATE
+                        INSERT INTO fiscal_numeracao (id_tenant, id_empresa, modelo, serie, ambiente, proximo_numero)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?::ambiente_fiscal, 2)
+                        ON CONFLICT (id_tenant, id_empresa, modelo, serie, ambiente) DO UPDATE
                             SET proximo_numero = fiscal_numeracao.proximo_numero + 1,
                                 atualizado_em = now()
                         RETURNING proximo_numero - 1
                         """)
-                .params(idEmpresa, modelo, serie)
+                .params(idEmpresa, modelo, serie, ambienteDe(producao))
                 .query(Integer.class)
                 .single();
 
@@ -65,13 +81,14 @@ public class FiscalNumeracaoService {
 
     /** Último número já usado na série ({@code proximo_numero - 1}); 0 se nada foi emitido. */
     @Transactional(readOnly = true)
-    public int ultimoNumeroUsado(long idEmpresa, int modelo, int serie) {
+    public int ultimoNumeroUsado(long idEmpresa, int modelo, int serie, boolean producao) {
         Integer proximo = jdbc.sql("""
                         SELECT proximo_numero FROM fiscal_numeracao
                         WHERE id_tenant = plataforma.tenant_atual()
                           AND id_empresa = ? AND modelo = ? AND serie = ?
+                          AND ambiente = ?::ambiente_fiscal
                         """)
-                .params(idEmpresa, modelo, serie)
+                .params(idEmpresa, modelo, serie, ambienteDe(producao))
                 .query(Integer.class)
                 .optional()
                 .orElse(1);

@@ -133,7 +133,9 @@ public class NfseEmissaoService {
         }
 
         long numeroDps = jaExiste.map(NfseDocumentoRepositorio.Documento::numeroDps)
-                .orElseGet(() -> numeracao.reservar(cab.idEmpresa(), cab.serie()));
+                // ⭐ O ambiente entra na reserva (V106): homologação e produção têm sequências
+                // separadas no SEFIN, e sem isso a nota de teste queimava o nDPS de produção.
+                .orElseGet(() -> numeracao.reservar(cab.idEmpresa(), cab.serie(), cab.ambienteProducao()));
         String id = idDps.montar(cab.codigoMunicipioIbge(), cab.cnpj(), cab.serie(), numeroDps);
         OffsetDateTime agora = OffsetDateTime.now();
 

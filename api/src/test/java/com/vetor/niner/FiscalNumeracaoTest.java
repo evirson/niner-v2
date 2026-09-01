@@ -77,14 +77,14 @@ class FiscalNumeracaoTest {
         TenantContext.comTenant(s.idTenant(), () -> {
             // A linha de fiscal_numeracao nem existe ainda: o ON CONFLICT precisa dar conta do
             // caso "primeira nota" sem que ninguém tenha semeado nada.
-            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1)).isZero();
+            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1, false)).isZero();
 
-            NumeroReservado primeiro = numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1);
+            NumeroReservado primeiro = numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false);
             assertThat(primeiro.numero()).isEqualTo(1);
             assertThat(primeiro.serie()).isEqualTo(1);
 
-            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1).numero()).isEqualTo(2);
-            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1)).isEqualTo(2);
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false).numero()).isEqualTo(2);
+            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1, false)).isEqualTo(2);
         });
     }
 
@@ -110,7 +110,7 @@ class FiscalNumeracaoTest {
                     try {
                         largada.await();
                         TenantContext.comTenant(s.idTenant(), () ->
-                                numeros.add(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1).numero()));
+                                numeros.add(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false).numero()));
                     } catch (Throwable e) {
                         falhas.add(e);
                     } finally {
@@ -138,14 +138,14 @@ class FiscalNumeracaoTest {
         Sessao s = assinarNovoTenant("series");
 
         TenantContext.comTenant(s.idTenant(), () -> {
-            numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1);
-            numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1);
+            numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false);
+            numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false);
 
-            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 2).numero())
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 2, false).numero())
                     .as("série 2 começa do 1, não continua a série 1").isEqualTo(1);
-            assertThat(numeracao.reservar(s.idEmpresa(), 55, 1).numero())
+            assertThat(numeracao.reservar(s.idEmpresa(), 55, 1, false).numero())
                     .as("NF-e (55) tem numeração própria, independente da NFC-e (65)").isEqualTo(1);
-            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1)).isEqualTo(2);
+            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1, false)).isEqualTo(2);
         });
     }
 
@@ -161,18 +161,18 @@ class FiscalNumeracaoTest {
 
         TenantContext.comTenant(a.idTenant(), () -> {
             for (int i = 0; i < 5; i++) {
-                numeracao.reservar(a.idEmpresa(), MODELO_NFCE, 1);
+                numeracao.reservar(a.idEmpresa(), MODELO_NFCE, 1, false);
             }
         });
 
         TenantContext.comTenant(b.idTenant(), () -> {
-            assertThat(numeracao.ultimoNumeroUsado(b.idEmpresa(), MODELO_NFCE, 1))
+            assertThat(numeracao.ultimoNumeroUsado(b.idEmpresa(), MODELO_NFCE, 1, false))
                     .as("o tenant B não vê as 5 notas do tenant A").isZero();
-            assertThat(numeracao.reservar(b.idEmpresa(), MODELO_NFCE, 1).numero()).isEqualTo(1);
+            assertThat(numeracao.reservar(b.idEmpresa(), MODELO_NFCE, 1, false).numero()).isEqualTo(1);
         });
 
         TenantContext.comTenant(a.idTenant(), () ->
-                assertThat(numeracao.ultimoNumeroUsado(a.idEmpresa(), MODELO_NFCE, 1))
+                assertThat(numeracao.ultimoNumeroUsado(a.idEmpresa(), MODELO_NFCE, 1, false))
                         .as("o tenant B não mexeu no contador do tenant A").isEqualTo(5));
     }
 
@@ -187,7 +187,7 @@ class FiscalNumeracaoTest {
 
         TenantContext.comTenant(s.idTenant(), () -> {
             Set<Integer> codigos = IntStream.range(0, 50)
-                    .mapToObj(i -> numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1))
+                    .mapToObj(i -> numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false))
                     .peek(r -> assertThat(r.codigoNumerico())
                             .as("cNF cabe em 8 dígitos e nunca é igual ao nNF")
                             .isBetween(10_000_000, 99_999_999)
@@ -198,6 +198,44 @@ class FiscalNumeracaoTest {
             // 50 sorteios em 90 milhões: colisão aqui denuncia gerador degenerado (constante,
             // semente fixa), não azar.
             assertThat(codigos).as("cNF é sorteado, não sequencial").hasSize(50);
+        });
+    }
+
+    /**
+     * ⭐ <b>Homologação e produção têm sequências SEPARADAS</b> (V106, 2026-08-31).
+     *
+     * <p>A SEFAZ mantém bases distintas para os dois ambientes, cada uma começando do 1. Até esta
+     * data a numeração era uma só, e <b>cada nota de teste queimava um número de produção</b>:
+     * medido no banco de dev, a NFC-e de homologação estava no 58, então a primeira nota real
+     * sairia com <b>59</b> — e os números 1 a 58, que a SEFAZ de produção nunca viu, virariam
+     * buraco de numeração e obrigação de inutilização formal.
+     *
+     * <p>⚠️ O defeito só aparece <b>ao trocar de ambiente</b>, que é exatamente o que o go-live é:
+     * enquanto a loja fica em homologação, tudo parece certo.
+     */
+    @Test
+    void homologacaoEProducaoTemSequenciasSeparadas() throws Exception {
+        Sessao s = assinarNovoTenant("ambientes");
+
+        TenantContext.comTenant(s.idTenant(), () -> {
+            // Três notas de teste em homologação — é o que a loja faz antes de abrir.
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false).numero()).isEqualTo(1);
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false).numero()).isEqualTo(2);
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false).numero()).isEqualTo(3);
+
+            // O go-live: vira a chave para produção. A primeira nota REAL tem de ser a número 1.
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, true).numero())
+                    .as("a primeira nota de PRODUÇÃO começa do 1 — as de teste não podem tê-la consumido")
+                    .isEqualTo(1);
+
+            // E os dois contadores seguem independentes, cada um no seu ritmo.
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, true).numero()).isEqualTo(2);
+            assertThat(numeracao.reservar(s.idEmpresa(), MODELO_NFCE, 1, false).numero())
+                    .as("homologação continua de onde parou, sem saber da produção")
+                    .isEqualTo(4);
+
+            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1, true)).isEqualTo(2);
+            assertThat(numeracao.ultimoNumeroUsado(s.idEmpresa(), MODELO_NFCE, 1, false)).isEqualTo(4);
         });
     }
 }

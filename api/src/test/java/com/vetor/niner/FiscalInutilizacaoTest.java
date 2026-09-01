@@ -467,9 +467,12 @@ class FiscalInutilizacaoTest {
         // A numeração precisa ter passado do 1, senão o guarda de "número ainda não alocado" é que
         // barraria — e o teste passaria pelo motivo errado.
         jdbc.sql("""
-                        INSERT INTO fiscal_numeracao (id_tenant, id_empresa, modelo, serie, proximo_numero)
-                        VALUES (?, ?, 65, 1, 5)
-                        ON CONFLICT (id_tenant, id_empresa, modelo, serie)
+                        -- ⚠️ `ambiente` entrou na chave em 2026-08-31 (V106): homologação e produção
+                        -- têm sequências separadas, senão a nota de teste queima número de produção.
+                        -- Este fixture é de HOMOLOGAÇÃO, que é onde os testes vivem.
+                        INSERT INTO fiscal_numeracao (id_tenant, id_empresa, modelo, serie, ambiente, proximo_numero)
+                        VALUES (?, ?, 65, 1, 'HOMOLOGACAO', 5)
+                        ON CONFLICT (id_tenant, id_empresa, modelo, serie, ambiente)
                         DO UPDATE SET proximo_numero = 5
                         """)
                 .params(idTenant, idEmpresa).update();

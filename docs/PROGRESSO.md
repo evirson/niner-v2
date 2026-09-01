@@ -11,6 +11,62 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (8) — NUMERAÇÃO POR AMBIENTE (V106): cada nota de teste queimava um número real
+>
+> Ele pediu duas coisas: *"para a NFS-e tem que emitir em homologação, pois ainda estamos com o ERP
+> em homologação"*, *"temos que ter a configuração de homologação e de produção pra NFS-e"* e
+> *"precisamos estar em homologação pra NFS-e, NF-e e NFC-e"*.
+>
+> ### O que já estava certo
+>
+> A NFS-e **já tem ambiente próprio** (`fiscal_config_nfse.ambiente`, default HOMOLOGAÇÃO) e o
+> emissor já aponta para o endereço certo: `sefin.producaorestrita.nfse.gov.br` é o ambiente de
+> homologação do Sefin Nacional — lá ele se chama **produção restrita**. O `tpAmb` do XML e a consulta
+> de municípios aderentes (`cfg_municipio_nfse`, PK por `(codigo_ibge, ambiente)`) também já
+> separavam. E ela **não** tem o problema do CSC: a NFS-e usa o certificado geral, não uma credencial
+> por ambiente.
+>
+> ### ⛔ O que estava errado, e é pior que o CSC
+>
+> **A numeração era compartilhada entre os dois ambientes — nos três documentos:**
+>
+> | Tabela | Chave, antes | Ambiente? |
+> |---|---|---|
+> | `fiscal_numeracao` (NFC-e/NF-e) | (tenant, empresa, modelo, série) | ❌ |
+> | `nfse_numeracao` | (tenant, empresa, série) | ❌ |
+> | `nfse_documento_numeracao_uk` | (tenant, empresa, série, nº) | ❌ |
+>
+> Homologação e produção são **bases separadas** na SEFAZ, cada uma começando do 1. Com um contador só
+> para as duas, **cada nota de teste queima um número de produção**. Medido neste banco: a NFC-e de
+> homologação estava no **58**, então a primeira nota real sairia com **59** — e os números 1 a 58,
+> que a SEFAZ de produção nunca viu, virariam buraco de numeração e obrigação de inutilização formal.
+>
+> ⭐ **Não é hipótese, já cobrou o preço:** a emissão de teste da NFS-e 7308 consumiu o `nDPS 2001000`
+> do CNPJ da Vetor — e o Evirson teve de anotar que a sequência do `finance-v` precisa ser empurrada
+> no servidor.
+>
+> ⚠️ **E o defeito só aparece ao TROCAR de ambiente** — que é exatamente o que o go-live é. Enquanto a
+> loja fica em homologação, tudo parece certo.
+>
+> ### Como foi feito
+>
+> A V106 põe `ambiente` na chave das três, com backfill marcando o que existe como do ambiente em que
+> a empresa está hoje. E as assinaturas de `reservar`/`ultimoNumeroUsado`/`avancarPara` passaram a
+> **exigir** o ambiente — de propósito: mudar a assinatura fez o **compilador** apontar os quatro
+> chamadores, um por um, em vez de deixar algum herdar o ambiente errado em silêncio.
+>
+> O teste que prende isso simula o go-live: três notas em homologação, vira a chave, e a primeira de
+> produção **tem de ser a número 1**. Sabotado (ignorando o ambiente): *"expected: 1 but was: 4"*.
+>
+> ⚠️ **Duas armadilhas do caminho:** o `mvn test` reaproveitou classes que o IDE havia compilado com
+> erro e o teste falhou por *"TestcontainersConfiguration cannot be resolved"* — só o `clean test`
+> resolveu. E um teste fazia `INSERT INTO fiscal_numeracao` direto, ficando para trás na mudança de
+> chave; o `clean test` também o pegou.
+>
+> **Estado dos três, conferido no banco:** NFC-e e NF-e em `HOMOLOGACAO` e emitindo; NFS-e ainda sem
+> linha de configuração, e o default do sistema é `HOMOLOGACAO`.
+>
+>
 > ## 📌 2026-08-31 (7) — "a venda tinha serviços, por que não emitiu a nota de serviço?"
 >
 > A NFC-e **estava certa**. Medido no XML da venda 628: **2 itens**, as duas mercadorias, `vNF`
