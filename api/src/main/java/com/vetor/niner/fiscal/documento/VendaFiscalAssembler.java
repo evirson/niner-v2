@@ -200,7 +200,30 @@ public class VendaFiscalAssembler {
         return Optional.of(new PedidoDeEmissao(impedimentoNfe, idTenant, idEmpresa, (int) idVenda,
                 venda.idCliente() == null ? null : venda.idCliente().intValue(), idUsuario,
                 config.ambiente(), modelo,
-                modelo.ehNfe() ? config.serieNfe() : config.serieNfce(), venda.dataVenda(),
+                modelo.ehNfe() ? config.serieNfe() : config.serieNfce(),
+                // ⛔ O `dhEmi` é o instante da EMISSÃO, não o da venda (2026-09-01). Aqui ia
+                // `venda.dataVenda()`, e a SEFAZ rejeitou com **cStat 704 — "NFC-e com Data-Hora
+                // de emissão atrasada. Tolerância de até 5 minutos"**: medido na venda 628, cujas
+                // três tentativas saíram todas com `dhEmi 19:54:34` e as de 20:38 e 20:40 não
+                // tinham como passar.
+                //
+                // ⚠️ Quem isso atingia não era só a retransmissão: a loja com
+                // `cfg_emite_fiscal_apos_venda` DESLIGADO emite depois, por escolha — e ali toda
+                // nota nasceria rejeitada, **queimando um número por tentativa**. Nota emitida
+                // hoje para uma venda de ontem sai com a data de hoje, e essa é a resposta
+                // correta: o documento fiscal está sendo emitido AGORA.
+                //
+                // ⭐ As duas devoluções (`DevolucaoFiscalAssembler`, `DevolucaoCompraFiscalAssembler`)
+                // já faziam assim; a venda é que era a exceção.
+                //
+                // ⚠️ Offset do container não importa: `MontadorXmlNfce` normaliza com
+                // `atZoneSameInstant(FusoDaUf.de(uf do emitente))` antes de usar no `dhEmi` e no
+                // AAMM da chave. O que precisa estar certo aqui é o INSTANTE.
+                //
+                // ⚠️ A contingência não é afetada: o dreno reenvia o `xml_assinado` como está,
+                // não remonta — e ali o `dhEmi` antigo é legítimo (é o momento em que a nota foi
+                // emitida offline, com `tpEmis=9` explicando à SEFAZ por que chegou depois).
+                OffsetDateTime.now(),
                 // A natureza da operacao aparece no DANFE e descreve o que a nota e: "ao consumidor"
                 // seria falso numa venda para revenda.
                 modelo.ehNfe() ? "VENDA DE MERCADORIA" : "VENDA AO CONSUMIDOR",
@@ -770,6 +793,12 @@ public class VendaFiscalAssembler {
                                  String cidade, String uf, String cep, String telefone) {
     }
 
+    /**
+     * ⚠️ {@code dataVenda} continua sendo lida e <b>deliberadamente não é usada como data de
+     * emissão</b> (2026-09-01) — quem tentar isso reabre o {@code cStat 704}. Ela fica porque é a
+     * pergunta que o próximo leitor vai fazer ("temos a data da venda, por que não usá-la?"), e a
+     * resposta está no ponto onde a tentação aparece: a montagem do {@code PedidoDeEmissao}.
+     */
     private record VendaHeader(Integer idCliente, OffsetDateTime dataVenda,
                                Integer codigoVendedor, String nomeVendedor) {
     }
