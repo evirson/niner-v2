@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-01 (3) — a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-01 (4) — a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,75 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-01 (4) — A NFS-e CHEGOU AO SEFIN: três bloqueios empilhados, e o do meio era invisível
+>
+> **Medido:** **1191 testes verdes** · `tsc -b` limpo · migrations até **V108** · a NFS-e é montada,
+> assinada, **enviada ao Sefin Nacional por mTLS e recebe resposta**.
+>
+> ### O relato, repetido três vezes: *"pedi pra emitir e não deu a opção de NFS-e"*
+>
+> Cada tentativa dele revelava só o bloqueio de cima. Eram **três**, empilhados:
+>
+> | # | Bloqueio | Por que não aparecia |
+> |---|---|---|
+> | 1 | Serviços **sem código LC 116** | a mensagem existia e era boa, mas ficava **abaixo da dobra** do popup |
+> | 2 | ⛔ **O emissor estava em modo FALSO** — e o `docker-compose.yml` **não repassava** `NINER_NFSE_EMISSOR` | `matchIfMissing = true`: rodando por Docker, **nenhuma NFS-e jamais iria ao Sefin**, com cadastro nenhum, e nada na tela dizia |
+> | 3 | `enviar_im` **NULL** para Curitiba → `COALESCE(…, false)` | a IM não ia no XML, e o Sefin recusava com `E0116` |
+>
+> ⭐ **O nº 2 é a lição do dia:** a variável existia no `application.yml`, o `EmissorFalso` tinha
+> `@ConditionalOnProperty(matchIfMissing = true)`, e o compose simplesmente **não a passava**. Uma
+> configuração que não chega é indistinguível de uma configuração desligada — e o padrão seguro
+> (`falso`) tornava o silêncio total. Ver
+> [[feedback_variavel_que_nao_chega_ao_container_e_padrao_silencioso]].
+>
+> ### ⛔ E o que ele pediu, que era o mais visível de todos
+>
+> Numa venda **100% serviço**, o popup oferecia *"Sim, identificar — **NFC-e**"* e depois respondia
+> *"NFC-e é documento de mercadoria"*. **A tela oferecia um documento que ela mesma ia recusar.**
+> Agora, quando todos os itens são serviço, os botões dizem **NFS-e** e o texto explica que NFC-e e
+> NF-e não serão emitidas. A pergunta do CPF continua — o tomador da NFS-e também é identificado.
+>
+> ### ⭐ A busca do código de serviço não falava a língua do lojista (V108)
+>
+> Medido contra a API: **"tosa" → 0 resultados** — sendo *"tosa"* o exemplo do próprio placeholder.
+> "cabelo" → 0 (a lei diz "cabeleireiros"), "manicure" → 0 (a lei diz "manicuros"), e **"banho"
+> devolvia o código ERRADO** para petshop (`060301`, sauna de gente), porque o `050801` fala em
+> *"embelezamento"*. Resultado real: **os 5 serviços do tenant ficaram sem código**, e o defeito só
+> apareceu no balcão.
+>
+> A correção é **dado, não código**: `cfg_servico_lc116.termos_busca`, com as palavras que o lojista
+> usa, para os 13 códigos dos ramos que o produto atende. Acrescentar termo é `UPDATE`, sem deploy —
+> mesmo padrão dos sinônimos do menu.
+>
+> ### ⛔ "Coloco o código do serviço e ele não grava"
+>
+> Era verdade, e não era gravação: ao clicar num código de **grupo especial** (obra, evento…), o
+> `escolher()` **retornava sem gravar** e deixava um aviso cinza no rodapé. Da cadeira dele:
+> *"cliquei e não aconteceu nada"* — o cadastro do INSTALACAO DE VIDRO ficou com **alíquota gravada
+> e código vazio**, prova do defeito.
+>
+> **Decisão dele:** o código grava **sempre**, inclusive o de grupo especial. ⚠️ E a trava **mudou
+> de lugar**, do front para o servidor — porque a única barreira que existia era a da tela, e o back
+> **não tinha nenhuma**: sem isso, o XML sairia sem o grupo obrigatório e a rejeição do Sefin viria
+> **depois de consumir o nDPS**, queimando numeração a cada tentativa.
+>
+> ### Onde a NFS-e parou, e não é código nosso
+>
+> `E0116 — "A IM deve ser informada… conforme registrado no CNC NFS-e do município emissor"`, mesmo
+> com **IM cadastrada** (`150112673740`) e **`enviar_im = true`** — cadeia conferida ponta a ponta.
+> É o que a memória já registrava: **`E0116` não é "IM ausente"**, é o CNC do município naquele
+> ambiente. Curitiba não tem a IM da empresa no CNC de **homologação**. A saída é emitir em
+> **produção**, como o Evirson fez com a 7308 — e o cancelamento existe, com tela, motivo de 15 a
+> 255 caracteres e aviso (não bloqueio) de prazo municipal.
+>
+> ### ⚠️ Dois limites declarados
+>
+> - **Serviço de grupo "obra" continua sem emitir** (decisão dele: não implementar o grupo agora).
+> - **Venda efetivada cujo cupom foi fechado antes de emitir não tem caminho pela tela** para emitir
+>   depois: os dois botões exigem `!reimpressao`. O servidor consegue; falta a tela oferecer.
+>
+> ---
 
 > ## 📌 2026-09-01 (3) — A NFC-e VOLTOU A EMITIR, e o dia inteiro foi de defeitos que só a TELA mostra
 >

@@ -934,6 +934,45 @@ trancasse todo mundo.
 teto **por conta** — o balde por IP é em memória e por instância (P6), então reinício da API zera e
 várias origens dividem o mesmo alvo sem estourar o balde de nenhuma.
 
+### 82. 🔴 NFS-e para no `E0116` em HOMOLOGAÇÃO — a saída é produção (2026-09-01)
+A NFS-e é montada, assinada e **chega ao Sefin Nacional**; a resposta é
+`E0116 — "A IM deve ser informada… conforme registrado no CNC NFS-e do município emissor"`.
+
+⚠️ **Não é IM ausente, e isso foi conferido ponta a ponta**: a empresa tem IM (`150112673740`), o
+município está com `enviar_im = true`, e a cadeia `empresa.inscricao_municipal →
+VendaNfseAssembler → MunicipioNfseService → MontadorXmlDps.tag("IM")` está completa. É o **CNC de
+Curitiba no ambiente de homologação**, que não tem a IM da empresa registrada — cadastro do lado do
+município, não nosso. Bate com o que o estudo já dizia: *"E0116 sai com IM, sem IM e em qualquer
+formato"*.
+
+**Como destravar:** emitir em **produção**, como o Evirson fez (nota 7308). ⚠️ Em produção a nota
+**vale** — gera ISS devido até ser cancelada. Emitir uma, de valor baixo, e cancelar em seguida.
+⭐ O cancelamento existe e tem tela (Fiscal › Documentos Fiscais › aba NFS-e), com motivo de 15 a
+255 caracteres e **aviso, não bloqueio**, de prazo municipal (o prazo de Curitiba não está
+cadastrado, então não haverá nem o aviso — cancelar no mesmo dia).
+
+### 83. 🔵 Serviço de grupo "obra" não emite NFS-e (2026-09-01)
+Códigos com `grupo_dps` preenchido (obra, atvEvento, lsadppu, explRod) exigem um bloco extra da DPS
+que o v1 não monta — **33 dos 334** códigos. O caso vivo é `070602` (colocação e instalação de
+vidros), que ele cadastrou.
+
+⭐ **O cadastro agora GRAVA o código** (decisão dele em 2026-09-01: *"apenas vamos colocar o
+código"*) e a trava passou a viver **no servidor**, recusando **antes de reservar o nDPS** — antes
+ela era só do front, que recusava a escolha e parecia falha de gravação.
+
+**Para emitir esses serviços** é preciso implementar o grupo: `cObra`/`inscImobFisc` + endereço da
+obra, com decisão de produto sobre **onde** o lojista informa (é por obra, não por serviço). ⛔ Ele
+disse explicitamente que **não quer isso agora**.
+
+### 84. 🟢 Venda sem nota não tem como emitir depois pela tela (2026-09-01)
+Os dois caminhos de emissão do PDV exigem `!reimpressao`: a pergunta automática do CPF e o botão
+manual "Emitir Nota Fiscal". Reabrindo a papeleta pela Pesquisa de Vendas **nenhum aparece**, e
+Documentos Fiscais não tem ação de emitir.
+
+Resultado: **venda efetivada cujo cupom foi fechado antes de emitir fica sem documento, sem caminho
+pela tela** — aconteceu com a venda 641 hoje. O servidor consegue
+(`POST /pdv/vendas/{id}/nfce` funciona); falta a tela oferecer, com o mesmo guarda de hoje.
+
 ### 80. 🔵 Backoffice sem restrição por IP — **esperando a Vetor ter IP fixo** (2026-09-01)
 Hoje `admin.nainer.com.br` está **aberto à internet**, com o login de staff como tranca única. O
 allowlist é a segunda tranca e **já está escrito e comentado** em `infra/nginx/`, em **dois** blocos
@@ -1583,9 +1622,12 @@ não somar mais um item.
 
 > ⚠️ **Apresentar assim, agrupado — nunca as ~29 linhas cruas.** Ele já disse *"TA MUITO CONFUSO"*.
 
-### 🟢 Nada trava a operação
+### 🟢 A NFC-e emite; a NFS-e chega ao Sefin e para num cadastro do MUNICÍPIO
 A NFC-e **emite** (#75 fechado por ele) e a numeração de produção nasce limpa (#76 fechado por
-medição). O fiscal está de pé: 7 notas hoje, 7 autorizadas.
+medição). A **NFS-e passou a chegar ao Sefin** — três bloqueios caíram hoje, sendo o do meio o
+invisível: **o emissor estava em modo falso porque o `docker-compose.yml` não repassava a
+variável**, então por Docker nenhuma NFS-e jamais teria saído. O que resta é o **#82** (`E0116`, o
+CNC de Curitiba em homologação), que se resolve emitindo em **produção**.
 
 ### ✅ Fechados neste último bloco
 **75** (CSC redigitado por ele) · **76** (não há numeração de produção queimada) · **81** (`dhEmi`
@@ -1594,9 +1636,12 @@ NFC-e que não lia o `infCpl` · o ✕ fora do canto em 3 popups · o "Conferind
 a tarja do DANFE (decisão dele) · **#68** encolheu: Devolução, Orçamento e 2FA abertos na tela.
 
 ### 🔵 Decisão de produto (bola dele)
-- **49** — credenciais da NFS-e: o **certificado A1 está lá** e o teste de conexão passa; o que
-  falta é a linha de configuração e os dados do Simples (**RBT12, anexo, alíquota efetiva**), que
-  só ele tem. **77** — configurar (Menu › Fiscal › Configuração da NFS-e).
+- **82** — emitir a NFS-e em **produção** (é a única saída para o `E0116`), com nota de valor baixo
+  e cancelamento em seguida. ⚠️ Em produção a nota **vale**.
+- **83** — implementar (ou não) o grupo **obra** da DPS: sem ele, instalação de vidro e os demais
+  33 códigos de grupo especial não emitem. Ele disse que **não quer agora**.
+- **49 / 77** — ✅ **feitos**: certificado A1 no lugar, configuração salva (homologação, série 1,
+  anexo III, alíquota 5,00), IM da empresa cadastrada e os 5 serviços com código LC 116.
 - **80** — backoffice por IP: **esperando a Vetor ter IP fixo** (registrado hoje).
 - **12** (13 popups sem ✕) · **11 / 28** (cobrança e planos pagos) · **14 / 69** (devolução não
   estorna comissão, taxa nem acréscimo) · **17** (estorno não revoga assinatura) · **47** (lead
@@ -1604,6 +1649,8 @@ a tarja do DANFE (decisão dele) · **#68** encolheu: Devolução, Orçamento e 
   **13** (Painel listado como futura).
 
 ### 🟢 O que sobrou da minha bola
+- **84** — venda sem nota não tem como emitir depois pela tela (os dois botões exigem
+  `!reimpressao`); o servidor consegue, falta a tela.
 - **Expurgo de `plataforma.codigo_login`** — não existe nenhum: a tabela cresce para sempre e
   guarda hash e IP de contas já excluídas (achado ao excluir o usuário de teste).
 - **54** (agenda da OS, depende dele) · **29** (depende do #28).
