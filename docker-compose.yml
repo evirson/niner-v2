@@ -93,6 +93,12 @@ services:
       # devolução é recusada na montagem (e seria recusada pela SEFAZ com cStat 975).
       NINER_FISCAL_RESPTEC_ID_CSRT: ${NINER_FISCAL_RESPTEC_ID_CSRT:-}
       NINER_FISCAL_RESPTEC_CSRT: ${NINER_FISCAL_RESPTEC_CSRT:-}
+      # ⛔ Emissor da NFS-e. Sem esta linha a variável NUNCA chegava ao container (2026-09-01), e
+      # o `matchIfMissing = true` do EmissorFalso vencia SEMPRE: rodando pelo compose, a NFS-e era
+      # simulada mesmo com a loja configurada e o certificado no lugar — e nada na tela dizia isso.
+      # O padrão continua `falso`, que é a decisão do application.yml: emitir NFS-e é ato fiscal
+      # com o CNPJ do lojista. Quem emite de verdade põe `nacional` no .env, conscientemente.
+      NINER_NFSE_EMISSOR: ${NINER_NFSE_EMISSOR:-falso}
       # Primeiro SUPER_ADMIN do backoffice (StaffBootstrap). Sem estas três, `plataforma.staff`
       # nasce vazia e o `admin/` sobe mas NINGUÉM consegue entrar — a API avisa em WARN na subida,
       # e a única saída seria um INSERT com hash BCrypt na mão. Só é usado quando a tabela está
