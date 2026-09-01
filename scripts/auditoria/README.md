@@ -45,3 +45,28 @@ pelo endpoint — quem o lesse receberia `undefined`, que é falsy, ou seja *"n�
 
 ⛔ **Nenhum dos dois substitui abrir a tela.** Os três defeitos de CSS de 2026-08-29 escaparam de
 dez varreduras de código e seriam pegos em dois minutos de navegador.
+
+## `contagem-de-telas.js` (2026-09-01, pendência #79)
+
+Reconcilia as **três** bases de contagem de telas — `docs/TELAS.md`, `web/src/App.tsx` e
+`cfg_tela` — e **lista as diferenças item a item, com nome de rota**. Sai com código 1 quando
+diverge. Ver o cabeçalho do arquivo para o motivo de cada base medir coisa diferente.
+
+```bash
+docker exec -i niner-db psql -U niner_owner -d niner_db -tAc \
+  "SELECT chave FROM cfg_tela ORDER BY chave;" > "$TEMP/cfg_tela.txt"
+node scripts/auditoria/contagem-de-telas.js
+```
+
+⚠️ O guarda que **reprova o build** é o `ContagemDeTelasConfereTest`; o script é a ferramenta de
+diagnóstico que diz *o quê* divergiu.
+
+## `contrato-ts-java.js` — reescrito em 2026-09-01
+
+Passou a casar por **ENDPOINT** (URL + método HTTP), não por nome de tipo. O motivo está no
+cabeçalho: existem dois `ResultadoEmissao` (NFC-e e NFS-e), e com 558 records o homônimo é a regra
+— a versão antiga comparava um com o outro e errou **4 de 4** achados.
+
+⛔ **Não reprova build de propósito**, e declara os limites: não compara *tipo* de campo, não
+alcança DTO montado como `Map<String,Object>`, não pega campo que mudou de *significado*, e não
+resolve rota montada por concatenação. `--verboso` lista o que ficou sem resolver.

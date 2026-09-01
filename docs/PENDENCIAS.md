@@ -11,7 +11,27 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-08-31 (fechamento do dia).** Estado medido: **1168 testes verdes, 0 falhas**
+> **Última revisão: 2026-09-01.** Estado medido: **1187 testes verdes, 0 falhas** · migrations até
+> **V107** · `tsc -b` limpo · **11 commits**, sem push.
+>
+> **Ele mandou fazer a lista 🟢 inteira**, e depois trouxe uma tarefa própria (dois PDFs de DANFE).
+> Fecharam: **#40** (teto no login do backoffice + o oráculo de tempo, V107), **#79** (contagem de
+> telas derivada — e faltavam **três telas** no inventário), **#78** (o PDV emite NFS-e, e a venda
+> **só de serviço** deixou de responder 409), **#71** (número queimado deixa rastro, nos **três**
+> pontos — o item apontava só um). Mais: as **duas primeiras corridas de concorrência** do projeto,
+> a auditoria de `configuracao/importacao/`, o contrato TS↔Java refeito por endpoint e um guarda
+> para a ajuda de tela.
+>
+> ⭐ **O que a auditoria DESCARTOU vale tanto quanto o que achou:** zero divergências no contrato
+> TS↔Java (189 chamadas), zero ajuda órfã, e o módulo de importação está correto — os cinco `SELECT`
+> que meu `grep` acusou têm `tenant_atual()` na linha seguinte. ⚠️ Foram **cinco falsos positivos
+> meus** até esses zeros; guarda que acusa falso treina quem lê a falha a desconfiar dele.
+>
+> ⛔ **E o defeito mais caro do dia foi meu, na tarefa dele:** gravei o `infCpl` no XML e **não
+> liguei a leitura**. Ele reportou três coisas que eram **uma só** — medido no banco, os três dados
+> estavam no XML o tempo todo. Ver `docs/PROGRESSO.md`, 2026-09-01 (2).
+>
+> **Revisão anterior: 2026-08-31 (fechamento do dia).** Estado medido: **1168 testes verdes, 0 falhas**
 > · migrations até **V106** · **60 telas** em `cfg_tela` · `tsc -b` limpo · build do front OK.
 > **21 commits meus**, mais os 6 do Evirson (NFS-e).
 >
@@ -1485,9 +1505,42 @@ não somar mais um item.
 </details>
 ---
 
-## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-08-31)
+## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-09-01)
 
 > ⚠️ **Apresentar assim, agrupado — nunca as ~29 linhas cruas.** Ele já disse *"TA MUITO CONFUSO"*.
+
+### 🔴 Trava a operação AGORA (bola dele) — **inalterado, e é o mais importante**
+- **75 — A NFC-e não emite.** O CSC de homologação gravado não é o credenciado; redigitar em
+  Fiscal › Configuração Fiscal. ⚠️ **Isto atrapalhou o trabalho de hoje**: não deu para emitir nota
+  nova de teste, porque cada tentativa volta `cStat 464` e **queima um número**.
+- **76 — números queimados.** A faixa cresceu hoje (ele emitiu notas 28–31 testando o DANFE).
+  Decidir se inutiliza. ⚠️ A partir de agora o número queimado por falha de montagem **deixa
+  rastro** (#71), mas os anteriores continuam sem linha.
+
+### ✅ Fechados em 2026-09-01
+**40** (teto no login do backoffice + oráculo de tempo, V107) · **71** (número queimado com rastro,
+nos três pontos) · **78** (NFS-e pelo PDV) · **79** (contagem de telas derivada). Mais, fora da
+numeração: duas corridas de concorrência reais, auditoria de `configuracao/importacao/`, contrato
+TS↔Java por endpoint, guarda da ajuda de tela, e a tarefa dos DANFEs.
+
+### 🟢 O que sobrou da minha bola
+- **54** — agenda da OS (depende de decisões dele) e executor por linha.
+- **29** — tela de contratação com escolha de grupo — **depende do #28** (planos pagos), que é dele.
+- Concorrência: faltam cota de vendas, reserva de OS, vale-mercadoria, numeração fiscal,
+  recebimento de crediário e o `SKIP LOCKED` do webhook.
+- **68** — o balanço do que continua sem cobertura (encolheu bastante hoje).
+
+### 🔵 Decisão de produto (bola dele)
+- **A tarja horizontal de homologação** no DANFE: o modelo dele só tem a marca d'água. Mantive as
+  duas; se for redundante, é um `if` a menos.
+- **77** — configurar a NFS-e · **49** — as credenciais (o compromisso da segunda-feira).
+- **12** — os 13 popups restantes sem ✕ · **11**/**28** — cobrança e planos pagos.
+- **14 / 69** — devolução não estorna comissão, taxa nem acréscimo · **17** — estorno não revoga
+  assinatura · **47** — lead grava consentimento não dado.
+- **22 (SVC)** · **23 (CSOSN 500)** · **66 (ano na inutilização)** · **13** (o Painel listado como
+  futura) · **40** — restringir o backoffice por IP (o allowlist já está escrito no nginx).
+
+<details><summary>Resumo anterior (2026-08-31)</summary>
 
 ### 🔴 Trava a operação AGORA (bola dele)
 - **75 — A NFC-e não emite.** O CSC de homologação gravado não é o credenciado; redigitar em Fiscal
@@ -1527,3 +1580,22 @@ não somar mais um item.
 - **68** — o limite declarado: telas nunca abertas. ⭐ **Encolheu hoje** — abri Sangria, Minha Conta,
   Relatório de Contas a Pagar, Parâmetros do Sistema, Fechamento de Caixa, Entrada de Produtos,
   Produto, Configuração Fiscal, PDV, OS e o relatório novo. Faltam Devolução, Orçamento e 2FA.
+
+</details>
+
+---
+
+## 📸 Telas abertas no navegador em 2026-09-01 (o item 68 encolheu de novo)
+
+| Tela | O que foi conferido |
+|---|---|
+| **PDV** (venda só de serviço) | toast verde SEM_MERCADORIA + aviso persistente com o valor exato |
+| **PDV** (dois serviços, NFS-e ligada) | o bloco "NOTAS DE SERVIÇO (NFS-E)" com badge e a mensagem do F11 inteira |
+| **PDV** (popup de emissão) | o campo de observações, com estilo e contador (454 de 500) |
+| **Documentos Fiscais › DANFE** | FATURA/DUPLICATA, ISSQN, transportador em 3 linhas, CODE-128C da chave, marca d'água na diagonal e o `infCpl` completo |
+
+⛔ **O que continua sem ser aberto:** Devolução, Orçamento e 2FA.
+
+⚠️ **Massa de teste deixada no dev** (não apago dado sem perguntar): vendas **631** e **632** (só
+serviço, criadas por mim) e a venda **633** (mercadoria, criada para ver o popup e **não emitida**).
+A configuração de NFS-e que inseri para ver a tela foi **removida** — o dev voltou ao estado dele.

@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-31 (NFS-e Nacional em produção V099–V103; relatório de OS V104; serviço nasce com variação, sem custo/margem, e a mensagem da OS no PDV diz o estado real)
+**Última atualização:** 2026-09-01 (a lista 🟢 inteira — teto no login do backoffice V107, contagem de telas derivada, NFS-e pelo PDV, número queimado com rastro, as duas primeiras corridas de concorrência; e o DANFE como o modelo dele: `infCpl` no XML, observações antes de emitir, CODE-128C da chave e marca d'água)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -11,6 +11,175 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-09-01 (2) — O DANFE COMO O MODELO DELE: `infCpl`, observações, código de barras e marca d'água
+>
+> Ele mandou dois PDFs — `NOTA_NAINER.pdf` e `NOTA_MITRYUS.pdf` (nota do sistema anterior) — e
+> pediu que o Nainer emitisse igual.
+>
+> ### O que mudou de lugar, e é o ponto
+>
+> O Nainer mandava `infCpl` **nulo**: o grupo `<infAdic>` nem era gerado e o DANFE imprimia um
+> travessão. Agora o campo leva **contrato (número da venda), forma de pagamento, vendedor, valor
+> aproximado dos tributos e a observação do operador**.
+>
+> ⭐ **O valor aproximado dos tributos MUDOU DE LUGAR, e essa é a correção que importa.** Antes ele
+> era desenhado pelo React na hora de imprimir: existia no **papel** e **não** no XML autorizado. A
+> Lei 12.741/2012 exige a informação **no documento fiscal** — e texto que só o React desenha não
+> está no documento, está no retrato dele.
+>
+> ### A decisão dele: observação ANTES de emitir
+>
+> O pedido dizia *"antes de imprimir"*. Levantei o problema: depois da autorização o XML está
+> assinado na SEFAZ, e acrescentar texto só ao papel faria o DANFE **divergir do documento que
+> vale**. Ele escolheu **antes de emitir** — o campo aparece no popup que já pergunta o CPF, e o
+> texto entra no XML e no DANFE, que passam a dizer a mesma coisa.
+>
+> ### ⭐⭐ A suíte pegou um defeito que rejeitaria TODA nota
+>
+> Juntei as partes do `infCpl` com `"\n"`. O XSD oficial recusa: o padrão é
+> `[!-ÿ]{1}[ -ÿ]{0,}[!-ÿ]{1}`, cuja faixa começa no **espaço (0x20)**, e `\n` é **0x0A**. Cinco
+> testes que já existiam ficaram vermelhos na hora, com a mensagem do próprio validador. Sem eles,
+> a primeira venda real depois do deploy é que teria descoberto — com o cliente na frente.
+>
+> ⚠️ **E o mesmo 0x0A volta pela porta do usuário:** o operador digita num `<textarea>` e o Enter
+> dele produz exatamente esse byte. A observação é sanitizada antes de entrar no XML.
+>
+> ⚠️ As quebras de linha que aparecem no DANFE do outro sistema **não estão no XML dele**: quem
+> quebra é a largura do campo no papel.
+>
+> ### ⛔ E então ele reportou quatro coisas — e três eram UMA, e era minha
+>
+> *"O conteúdo de observações não sai · não saem os tributos aproximados · tem que sair o número da
+> venda · não imprime o código de barras."*
+>
+> **Medi antes de tocar em código.** A nota 30 (venda 636) já tinha no XML:
+>
+> ```
+> CONTRATO: 636, FORMA PGTO: PIX, VENDEDOR: 1-VENDEDOR TESTE; OBS.: bla bla bla bla
+> Valor aproximado dos tributos: R$ 128,73 (Lei 12.741/2012 - Fonte: IBPT).
+> ```
+>
+> Os três dados estavam lá **o tempo todo**. O que faltava era a **leitura**: eu passei a gravar o
+> `infCpl` e **não liguei a outra ponta** — `DocumentoFiscalConsultaService` preenchia
+> `informacoesComplementares` apenas com o texto de devolução. É a família de
+> [[feedback_corrigir_uma_ponta_sem_varrer_as_outras]], que o `CLAUDE.md` chama de *o defeito mais
+> comum deste projeto*, e desta vez fui eu.
+>
+> ⭐ **A leitura vem do XML ASSINADO, não de uma coluna nova.** O DANFE tem de mostrar o que a SEFAZ
+> **tem**; uma coluna espelho poderia divergir do XML — que é exatamente o risco que a decisão de
+> digitar a observação antes de emitir existe para evitar. De quebra a devolução melhorou: o
+> `infCpl` dela no XML já era mais completo que o texto que o DANFE montava.
+>
+> ### O layout, item por item
+>
+> | Bloco | Estado antes | Agora |
+> |---|---|---|
+> | Canhoto | ✅ **já existia** — eu afirmei a ele que faltava, e errei: tinha olhado só os títulos de seção, e o canhoto não usa aquela classe | inalterado |
+> | FATURA / DUPLICATA | ❌ ausente | ✅ com o texto padrão do leiaute |
+> | CÁLCULO DO ISSQN | ❌ ausente | ✅ zerado de propósito — serviço sai em NFS-e |
+> | Transportador | 1 linha | ✅ **3 linhas**: endereço, município, IE, volumes, pesos |
+> | Código de barras da chave | ❌ só os 44 dígitos | ✅ **CODE-128C** |
+> | Marca d'água | tarja horizontal | ✅ **"NFe sem Valor Fiscal - Homologação"** na diagonal |
+>
+> ⚠️ **CODE-128C, não CODE-128 genérico:** o "C" codifica **pares** de dígitos — 44 viram 22
+> símbolos, e é isso que faz a barra caber na largura do quadro. Com **zona de silêncio de 10
+> módulos** de cada lado: sem ela, um código impresso com precisão perfeita simplesmente não lê
+> (aprendido na etiqueta em 21/08). E ⛔ sem `shape-rendering: crispEdges`.
+>
+> ⛔ **A marca d'água é TEXTO, nunca `background-image`:** background não sai na impressão, e este é
+> justamente o aviso que não pode faltar no papel — uma nota de homologação impressa sem ele parece
+> uma nota de verdade.
+>
+> ⚠️ **E corrigi um comentário meu que mentia:** escrevi que a marca ficaria *atrás* do conteúdo.
+> Não fica, e não dá para inverter — elemento posicionado pinta sobre o conteúdo em fluxo, e
+> `z-index: -1` a esconderia atrás do fundo branco do próprio DANFE. Quem garante a legibilidade é
+> o **alpha de 13%**; por isso a cor é `rgba` e não um cinza sólido.
+>
+> ### Conferido na tela, não só na suíte
+>
+> O campo de observações no popup (com contador, 454 de 500), os quatro blocos novos do DANFE, o
+> código de barras, a marca d'água na diagonal com o texto por baixo legível, e o `infCpl` completo
+> em DADOS ADICIONAIS. ⛔ **Não emiti nota nova**: a NFC-e rejeita pelo CSC errado (#75) e cada
+> tentativa queima um número (#76) — usei as notas que ele mesmo emitiu.
+>
+> **Suíte: 1187 verdes.**
+>
+> ---
+>
+> ## 📌 2026-09-01 (1) — A LISTA 🟢 INTEIRA: segurança, contagem de telas, NFS-e no PDV, concorrência
+>
+> Ele mandou fazer a lista *"Minha bola, quando você mandar"* de `docs/PENDENCIAS.md`.
+>
+> ### #40 — o login do backoffice não tinha teto, e o hash de mentira estava quebrado (V107)
+>
+> Duas coisas, e **a segunda só apareceu porque foi MEDIDA** contra a API rodando:
+>
+> | | e-mail existente | e-mail inexistente |
+> |---|---|---|
+> | **Antes** | ~50 ms | **~6 ms** |
+> | **Depois** | ~50 ms | ~49 ms |
+>
+> O hash de mentira que dá tempo constante ao e-mail inexistente tinha **63 caracteres** onde o
+> BCrypt exige **60** (7 do prefixo + 22 de salt + 31 de hash): o `matches` recusava o formato e
+> **retornava sem calcular**. 8× de diferença era enumeração de staff pela internet, com **uma**
+> requisição e de graça.
+>
+> ⭐ Agora o hash de mentira é **gerado pelo próprio encoder**. Um literal pode nascer malformado de
+> novo e **nada falha** — a defesa simplesmente some.
+>
+> Entrou também o teto de **5 tentativas / 15 min** (V107), com o `UPDATE` do contador **fora de
+> transação**: dentro dela o rollback da exceção que informa o erro apagaria a tentativa, que é
+> literalmente o defeito do 2FA de 27/08. ⭐ Sabotado para provar: com `@Transactional` o contador
+> fica em **0**.
+>
+> ### #79 — a contagem de telas divergia, e faltavam TRÊS telas
+>
+> O item pedia para reconciliar 58 × 57 × 60. Derivar a conta em vez de recontar achou mais: o
+> inventário **não listava** o Relatório de Ordens de Serviço (entregue em 31/08), a abertura de OS
+> e o Histórico do Cliente. E a quarta divergência que o script achou sozinho é a **pendência #13**
+> (a raiz `/` listada como futura sendo um `<Dashboard />` real) — virou **exceção nomeada**, com o
+> número da pendência ao lado.
+>
+> O conserto não foi escolher um número: `scripts/auditoria/contagem-de-telas.js` +
+> `ContagemDeTelasConfereTest` (4 testes, um deles pegando o arquivo discordar **de si mesmo**).
+>
+> ### #78 — o PDV emite NFS-e, e a venda só de serviço deixou de ser 409
+>
+> Regra confirmada por ele: **uma NFS-e por código de serviço distinto**. ⭐ O que estava quebrado
+> era maior que o item: a loja que vende **só serviço** — petshop, consultório — não conseguia
+> emitir documento **nenhum** pelo caixa. O backend passou a **orquestrar** (P4).
+>
+> ### #71 — número queimado, e o defeito estava também na VENDA
+>
+> O item apontava só a devolução. Conferindo o código, a emissão da venda tinha o mesmo buraco — o
+> que já estava resolvido lá era a recusa por **duplicidade**, outra coisa. `gravarNumeroQueimado`
+> grava `NAO_EMITIDO` **com série e número**, em `REQUIRES_NEW` (o método roda **enquanto uma
+> exceção sobe**).
+>
+> ### Concorrência real — as duas primeiras corridas do projeto
+>
+> Nenhum dos ~30 `FOR UPDATE` tinha sido **exercitado**. Agora dois foram, os dois em caminho de
+> dinheiro, e a sabotagem é o ponto: sem a trava, **3 de 3** rodadas venderam R$ 1.600 em crediário
+> contra um limite de R$ 1.000.
+>
+> ⭐ **E escrever a corrida achou um defeito nos testes vizinhos:** `SELECT count(*)` **sem
+> `id_tenant`**. A conexão do Testcontainers usa o **superusuário**, que ignora RLS — a contagem
+> media o banco inteiro e só passava enquanto ninguém mais gravasse.
+>
+> ### O que a auditoria DESCARTOU, e vale tanto quanto
+>
+> - `configuracao/importacao/` (17 arquivos, 2.711 linhas): **um** achado — o progresso da
+>   importação não era isolado por tenant. O resto está certo, inclusive os cinco `SELECT` que meu
+>   primeiro `grep` acusou (o `tenant_atual()` está **na linha seguinte**).
+> - Contrato TS↔Java: **zero** achados em 189 chamadas casadas por endpoint. Os 5 antigos eram
+>   todos falsos — casavam por **nome de tipo**, e existem dois `ResultadoEmissao` diferentes.
+> - `AjudaDaTela`: **zero** chaves órfãs e zero faltando.
+>
+> ⚠️ **Foram CINCO falsos positivos meus até esses zeros** (3 no contrato, 2 na ajuda), todos
+> plausíveis à primeira vista. Guarda que acusa falso treina quem lê a falha a desconfiar dele.
+>
+> ---
+>
 > ## 📌 2026-08-31 (9) — CSC POR AMBIENTE (V105), e o diagnóstico do `cStat 464` dele
 >
 > > *"Efetivei a venda 628, na hora que fui emitir a NFC-e deu este erro: A SEFAZ rejeitou a nota:

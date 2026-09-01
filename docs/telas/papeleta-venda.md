@@ -440,3 +440,62 @@ botão "Ver DANFE" **não aparece** — ele prometeria um DANFE que não existe.
   QR Code, URL de consulta e **sem** o botão "Ver DANFE".
 - ⚠️ **Não medido pelo caminho dele:** emitir a NF-e 55 **pelo PDV** exige uma venda nova. É o
   mesmo componente e a mesma linha, mas essa prova está faltando.
+
+---
+
+## 2026-09-01 — O DANFE ficou como o modelo do sistema anterior dele
+
+Ele mandou dois PDFs (`c:\fix\NOTA_NAINER.pdf` e `c:\fix\NOTA_MITRYUS.pdf`) e pediu que o Nainer
+emitisse igual. O que entrou:
+
+| Bloco | Antes | Agora |
+|---|---|---|
+| Canhoto | ✅ **já existia** | inalterado |
+| FATURA / DUPLICATA | ausente | presente, com o texto padrão do leiaute |
+| CÁLCULO DO ISSQN | ausente | presente, **zerado de propósito** — serviço sai em NFS-e |
+| Transportador | 1 linha | **3 linhas**: endereço, município, IE, volumes, pesos |
+| Código de barras da chave | só os 44 dígitos | **CODE-128C** |
+| Marca d'água | tarja horizontal | **"NFe sem Valor Fiscal - Homologação"**, na diagonal |
+| INFORMAÇÕES COMPLEMENTARES | travessão | contrato, forma de pagamento, vendedor, tributos, observação |
+
+⚠️ **Eu afirmei ao dono do produto que faltava o canhoto, e errei** — tinha olhado só os títulos de
+seção, e o canhoto não usa aquela classe.
+
+### O campo de observações — e por que ele é ANTES de emitir
+
+O pedido dizia *"antes de imprimir"*. **Depois da autorização o XML está assinado na SEFAZ**, e
+acrescentar texto só ao papel faria o DANFE **divergir do documento que vale**. Levantei o problema
+e ele escolheu **antes de emitir**: o campo aparece no popup que já pergunta o CPF, e o texto entra
+no `infCpl` do XML **e** no DANFE.
+
+⛔ **O separador do `infCpl` é `" | "`, nunca `"\n"`**: o XSD recusa 0x0A (o padrão começa no
+espaço, 0x20) e **toda** nota seria rejeitada. E como o operador digita num `<textarea>`, o Enter
+dele traz o mesmo byte — o texto é sanitizado antes de entrar no XML. As quebras de linha que
+aparecem no DANFE do outro sistema **não estão no XML dele**: quem quebra é a largura do campo.
+
+### ⛔ O valor aproximado dos tributos MUDOU DE LUGAR
+
+Antes era desenhado pelo React na hora de imprimir — existia **no papel** e **não no XML
+autorizado**. A Lei 12.741/2012 exige a informação **no documento fiscal**, e texto que só o React
+desenha não está no documento: está no retrato dele. Agora vai no `infCpl`.
+
+### ⛔ E o DANFE lê o `infCpl` do XML ASSINADO
+
+Não de uma coluna espelho — coluna paralela pode divergir do XML, que é o risco que a decisão acima
+existe para evitar. ⚠️ **Foi aqui que eu errei:** gravei o `infCpl` e não liguei a leitura, e o
+dono do produto reportou três coisas que eram **uma só**. Os três dados estavam no XML o tempo todo.
+
+### Detalhes do desenho que custam se esquecidos
+
+- **CODE-128C**, não CODE-128 genérico: o "C" codifica **pares** de dígitos (44 → 22 símbolos), e é
+  isso que faz a barra caber na largura do quadro. Zona de silêncio de **10 módulos** de cada lado
+  (sem ela o leitor recusa) e ⛔ sem `shape-rendering: crispEdges`.
+- **A marca d'água é TEXTO** com `print-color-adjust: exact`, nunca `background-image`: background
+  não sai na impressão, e é exatamente o aviso que não pode faltar no papel. Ela pinta **acima** do
+  conteúdo e não dá para inverter (`z-index: -1` a esconderia sob o fundo branco do DANFE) — quem
+  garante a legibilidade é o **alpha de 13%**.
+
+### 🔵 Aberto para ele
+
+A **tarja horizontal** de homologação continua acima do cabeçalho. O modelo dele só tem a marca
+d'água; mantive as duas porque ele não pediu para remover.
