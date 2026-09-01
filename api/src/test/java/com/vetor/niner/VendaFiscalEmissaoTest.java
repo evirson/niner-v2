@@ -471,7 +471,13 @@ class VendaFiscalEmissaoTest {
         assertThat((BigDecimal) gravado.get("valor")).isEqualByComparingTo("38.00");
         assertThat((String) gravado.get("xml"))
                 .contains("<vTotTrib>38.00</vTotTrib>")
-                .contains("<orig>1</orig>");
+                .contains("<orig>1</orig>")
+                // ⭐ O caso POSITIVO da Lei 12.741/2012 (2026-09-01): com tributos apurados, o
+                // valor aproximado entra no `infCpl` — ou seja, no XML autorizado, não só no
+                // desenho do DANFE. Antes ele era escrito pelo React na hora de imprimir: a
+                // informação que a lei exige NO DOCUMENTO existia no papel e não no documento.
+                .contains("Valor aproximado dos tributos: R$ 38,00")
+                .contains("Lei 12.741/2012");
 
         // A papeleta (DANFE, §3-4 do estudo) precisa do mesmo dado pronto pra impressão: número
         // oficial da NFC-e (não o id interno da venda), série, e "consumidor não identificado"
@@ -1007,6 +1013,73 @@ class VendaFiscalEmissaoTest {
                 .as("o motivo é o que alguém vai ler meses depois para decidir se inutiliza a faixa")
                 .contains("Número reservado e não utilizado")
                 .contains("sabotagem do teste");
+    }
+
+    /**
+     * ⭐ O campo INFORMAÇÕES COMPLEMENTARES (`infCpl`) — pedido dele em 2026-09-01.
+     *
+     * <p>Até essa data o Nainer mandava {@code infCpl} <b>nulo</b>: o grupo {@code <infAdic>} nem
+     * era gerado e o DANFE imprimia um travessão. Agora leva contrato, forma de pagamento,
+     * vendedor, o <b>valor aproximado dos tributos</b> e a <b>observação do operador</b>.
+     *
+     * <p>⛔ <b>A asserção que mais importa é a da quebra de linha</b>, e ela existe porque o defeito
+     * aconteceu: a primeira versão juntava as partes com {@code "\n"} e o XSD oficial recusou
+     * <b>toda</b> nota — o padrão do campo é {@code [!-ÿ]{1}[ -ÿ]{0,}[!-ÿ]{1}}, cuja faixa começa
+     * no <b>espaço</b> (0x20), e {@code \n} é 0x0A. Cinco testes que já existiam ficaram vermelhos
+     * na hora. ⚠️ O operador digita num {@code <textarea>}, então o Enter dele traz o mesmo 0x0A
+     * pela porta do usuário — por isso o teste manda uma observação <b>com quebra de linha
+     * dentro</b>, que é o caso que reprova a versão sem sanitização.
+     */
+    @Test
+    void informacoesComplementaresLevamContratoPagamentoVendedorTributosEObservacao() throws Exception {
+        String token = assinarNovoTenant("infcpl");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "11222333000181";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscal(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO INFCPL", idPerfil, "30.00");
+        long idCliente = criarClienteAnonimo(token, "Cliente InfCpl");
+        long idFuncionario = criarFuncionario(token, "Vendedor InfCpl");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "30.00");
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        // Observação COM quebra de linha e espaços repetidos, de propósito.
+                        .content("{\"incluirCpf\":false,\"observacao\":\"Entrega\\nsexta   14h\"}"))
+                .andExpect(status().isOk());
+
+        String infCpl = jdbc.sql("""
+                        SELECT substring(xml_assinado from '<infCpl>(.*?)</infCpl>')
+                          FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_venda = ?
+                        """)
+                .params(idTenant, idVenda).query(String.class).single();
+
+        assertThat(infCpl)
+                .as("⛔ o XSD do infCpl recusa 0x0A: quebra de linha aqui rejeita a nota inteira")
+                .doesNotContain("\n").doesNotContain("\r")
+                .contains("CONTRATO: " + idVenda)
+                .contains("FORMA PGTO: DINHEIRO")
+                .contains("VENDEDOR: " + idFuncionario + "-VENDEDOR INFCPL")
+                .as("a observação do operador entra no XML, não só no papel")
+                .contains("OBS.: Entrega sexta 14h")
+                // ⚠️ Este produto não tem alíquota IBPT cadastrada, então o total de tributos é
+                // ZERO — e a linha da Lei 12.741 NÃO sai. É desenho, não esquecimento: "valor
+                // aproximado dos tributos: R$ 0,00" seria pior que a ausência, porque afirma um
+                // número. O caso positivo está em
+                // vendaComAliquotaIbptResolvidaCalculaVTotTribRealEGravaComOOrigemCorreto.
+                .as("com tributos zerados a linha da Lei 12.741 não pode aparecer")
+                .doesNotContain("Valor aproximado dos tributos");
     }
 
     private int proximoNumero(long idTenant, long idEmpresa) {

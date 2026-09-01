@@ -30,7 +30,14 @@ public class VendaFiscalController {
     /** {@code incluirCpf} (2026-08-19) — resposta da pergunta feita ao operador antes de emitir
      *  (ver {@code ComprovantePapeletaModal.tsx}); nunca mais inferido sozinho do cliente da
      *  venda. */
-    public record EmitirNfceRequest(boolean incluirCpf) {
+    /**
+     * @param observacao 2026-09-01 — texto livre digitado pelo operador <b>antes de emitir</b>, que
+     *         vai para o {@code infCpl} do XML e aparece em INFORMAÇÕES COMPLEMENTARES no DANFE.
+     *         ⚠️ Tem de ser antes de emitir, não antes de imprimir: depois da autorização o XML
+     *         está assinado na SEFAZ, e um texto acrescentado só ao papel faria o DANFE divergir do
+     *         documento que vale. Opcional — {@code null} não gera linha nenhuma.
+     */
+    public record EmitirNfceRequest(boolean incluirCpf, String observacao) {
     }
 
     /**
@@ -41,7 +48,7 @@ public class VendaFiscalController {
     @PostMapping("/{idVenda}/nfce")
     public ResponseEntity<ResultadoEmissao> emitir(@AuthenticationPrincipal Jwt jwt, @PathVariable long idVenda,
                                                    @RequestBody EmitirNfceRequest req) {
-        return service.emitirNfce(jwt, idVenda, req.incluirCpf())
+        return service.emitirNfce(jwt, idVenda, req.incluirCpf(), req.observacao())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }

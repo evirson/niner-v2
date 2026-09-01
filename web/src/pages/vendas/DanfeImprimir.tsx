@@ -173,6 +173,25 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
         <Campo rotulo="INSCRIÇÃO ESTADUAL" valor={d.destinatario.inscricaoEstadual ?? '—'} />
       </div>
 
+      {/* ---------------------------------------------------------------- fatura / duplicata */}
+      {/* ⚠️ Bloco OBRIGATÓRIO do leiaute do DANFE (Manual de Integração, quadro "FATURA/DUPLICATA"),
+          e ele aparece MESMO SEM DUPLICATA — é onde a nota declara como foi paga. O PDV fecha a
+          venda à vista ou em crediário e não gera duplicata, então o que vai aqui é a forma de
+          pagamento; o texto da direita é o mesmo que o leiaute manda quando o pagamento não é por
+          duplicata. Faltava inteiro até 2026-09-01. */}
+      {/* ⚠️ Sem detalhar a forma de pagamento AQUI, de propósito: ela já vai por extenso no campo
+          de informações complementares ("FORMA PGTO: …"), montado pelo servidor e presente no XML.
+          Repetir no papel um dado que vem de outra fonte é como duas contagens do mesmo número
+          divergirem depois — e o modelo que ele mandou faz exatamente assim. */}
+      <div className="danfe-secao-titulo">FATURA / DUPLICATA</div>
+      <div className="danfe-linha">
+        <Campo
+          rotulo=""
+          valor="Outras formas de pagamento — verifique as informações no campo de dados adicionais"
+          className="danfe-col-3"
+        />
+      </div>
+
       {/* ---------------------------------------------------------------- cálculo do imposto */}
       <div className="danfe-secao-titulo">CÁLCULO DO IMPOSTO</div>
       <div className="danfe-linha">
@@ -193,11 +212,33 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
       </div>
 
       {/* ---------------------------------------------------------------- transportador */}
+      {/* ⚠️ Três linhas, como manda o leiaute — até 2026-09-01 saía só a primeira.
+          O Nainer não tem cadastro de transportadora nem de volumes (o PDV é venda de balcão), e
+          por isso os campos saem vazios. ⛔ Vazio NÃO é o mesmo que ausente: o quadro precisa
+          existir no papel porque é nele que o transportador ANOTA À MÃO, na entrega, o que não foi
+          digitado — é a razão de o DANFE ter esse bloco mesmo em nota que não tem frete. */}
       <div className="danfe-secao-titulo">TRANSPORTADOR / VOLUMES TRANSPORTADOS</div>
       <div className="danfe-linha">
         <Campo rotulo="NOME / RAZÃO SOCIAL" valor="—" className="danfe-col-2" />
         <Campo rotulo="FRETE POR CONTA" valor="9 - Sem frete" />
+        <Campo rotulo="CÓDIGO ANTT" valor="—" />
+        <Campo rotulo="PLACA DO VEÍCULO" valor="—" />
+        <Campo rotulo="UF" valor="—" />
         <Campo rotulo="CNPJ / CPF" valor="—" />
+      </div>
+      <div className="danfe-linha">
+        <Campo rotulo="ENDEREÇO" valor="—" className="danfe-col-2" />
+        <Campo rotulo="MUNICÍPIO" valor="—" />
+        <Campo rotulo="UF" valor="—" />
+        <Campo rotulo="INSCRIÇÃO ESTADUAL" valor="—" />
+      </div>
+      <div className="danfe-linha">
+        <Campo rotulo="QUANTIDADE" valor="—" alinhar="direita" />
+        <Campo rotulo="ESPÉCIE" valor="—" />
+        <Campo rotulo="MARCA" valor="—" />
+        <Campo rotulo="NUMERAÇÃO" valor="—" />
+        <Campo rotulo="PESO BRUTO" valor="—" alinhar="direita" />
+        <Campo rotulo="PESO LÍQUIDO" valor="—" alinhar="direita" />
       </div>
 
       {/* ---------------------------------------------------------------- produtos */}
@@ -241,20 +282,40 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
         </tbody>
       </table>
 
+      {/* ---------------------------------------------------------------- ISSQN */}
+      {/* ⚠️ Quadro obrigatório do leiaute, e ele fica ZERADO de propósito nesta nota: serviço não
+          entra em NFC-e/NF-e — é ISS municipal, e o documento dele é a NFS-e, emitida à parte pelo
+          mesmo PDV desde 2026-09-01. O quadro existe porque o DANFE é um formulário padronizado: o
+          contador espera encontrá-lo, e a ausência dele levanta dúvida que o zero não levanta. */}
+      <div className="danfe-secao-titulo">CÁLCULO DO ISSQN</div>
+      <div className="danfe-linha">
+        {/* ⚠️ Em branco de propósito, e o modelo que ele mandou faz igual: a Inscrição Municipal só
+            tem função neste quadro quando a nota declara SERVIÇO, e uma NFC-e/NF-e do PDV nunca
+            declara — o serviço sai em NFS-e, documento próprio. Trazer o campo do cadastro da
+            empresa até aqui seria plumbing para um valor decorativo. */}
+        <Campo rotulo="INSCRIÇÃO MUNICIPAL" valor="—" />
+        <Campo rotulo="VALOR TOTAL DOS SERVIÇOS" valor={moeda(0)} alinhar="direita" />
+        <Campo rotulo="BASE DE CÁLCULO DO ISSQN" valor={moeda(0)} alinhar="direita" />
+        <Campo rotulo="VALOR DO ISSQN" valor={moeda(0)} alinhar="direita" />
+      </div>
+
       {/* ---------------------------------------------------------------- dados adicionais */}
       <div className="danfe-secao-titulo">DADOS ADICIONAIS</div>
       <div className="danfe-linha">
         <div className="danfe-campo danfe-col-3">
           <span className="danfe-campo-rotulo">INFORMAÇÕES COMPLEMENTARES</span>
-          <span className="danfe-campo-valor danfe-infcpl">
-            {d.informacoesComplementares ?? '—'}
-            {d.totais.valorTotalTributos > 0 && (
-              <>
-                <br />
-                Valor aproximado dos tributos: R$ {moeda(d.totais.valorTotalTributos)} (Lei 12.741/2012 — Fonte:
-                IBPT).
-              </>
-            )}
+          {/* ⭐ O texto vem INTEIRO do `infCpl` do XML (2026-09-01), inclusive o valor aproximado
+              dos tributos e a observação do operador.
+
+              ⛔ Antes o "Valor aproximado dos tributos" era desenhado AQUI, pelo React, e não
+              existia no XML autorizado — ou seja, a informação que a Lei 12.741/2012 exige NO
+              DOCUMENTO FISCAL estava só no retrato dele. Agora o backend a coloca no `infCpl`, e o
+              DANFE apenas mostra o que a SEFAZ recebeu. Reintroduzir o texto aqui faria a linha
+              aparecer DUAS vezes no papel. */}
+          <span className="danfe-campo-valor danfe-infcpl" style={{ whiteSpace: 'pre-line' }}>
+            {/* ⚠️ `||`, não `??`: nota emitida ANTES de 2026-09-01 volta com string VAZIA, não
+                null, e o `??` deixava a caixa em branco — visto na tela, não deduzido. */}
+            {d.informacoesComplementares || '—'}
           </span>
         </div>
         <Campo rotulo="RESERVADO AO FISCO" valor="" />

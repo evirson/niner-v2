@@ -413,10 +413,10 @@ export interface ResultadoEmissaoNfce {
  * mesmo que a venda tenha cliente vinculado. Nunca mais decidido sozinho a partir do cliente da
  * venda — ver `ComprovantePapeletaModal.tsx`.
  */
-export async function emitirNfce(idVenda: number, incluirCpf: boolean): Promise<ResultadoEmissaoNfce | null> {
+export async function emitirNfce(idVenda: number, incluirCpf: boolean, observacao?: string): Promise<ResultadoEmissaoNfce | null> {
   const resposta = await api<ResultadoEmissaoNfce | undefined>(`/api/v1/pdv/vendas/${idVenda}/nfce`, {
     method: 'POST',
-    body: JSON.stringify({ incluirCpf }),
+    body: JSON.stringify({ incluirCpf, observacao: observacao?.trim() || null }),
   })
   return resposta ?? null
 }

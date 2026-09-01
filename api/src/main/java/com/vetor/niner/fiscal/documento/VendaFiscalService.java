@@ -54,7 +54,7 @@ public class VendaFiscalService {
      * @return vazio quando o fiscal está desligado para a empresa (F12) — a tela não mostra nada,
      *         exatamente como se o módulo fiscal não existisse
      */
-    public Optional<ResultadoEmissao> emitirNfce(Jwt jwt, long idVenda, boolean incluirCpf) {
+    public Optional<ResultadoEmissao> emitirNfce(Jwt jwt, long idVenda, boolean incluirCpf, String observacao) {
         long idTenant = ((Number) jwt.getClaim("tid")).longValue();
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
         Integer idUsuario = Integer.parseInt(jwt.getSubject());
@@ -72,7 +72,7 @@ public class VendaFiscalService {
         // levava 409 — "só tem serviços, imprima a papeleta" —, o que impedia o PDV de emitir
         // QUALQUER documento para o caso normal de petshop e de consultório.
         Optional<ResultadoEmissao> daMercadoria = temMercadoria
-                ? assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf).map(emissao::emitir)
+                ? assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf, observacao).map(emissao::emitir)
                 : Optional.empty();
 
         // ---------- perna 2: os serviços (N NFS-e, uma por código) ----------

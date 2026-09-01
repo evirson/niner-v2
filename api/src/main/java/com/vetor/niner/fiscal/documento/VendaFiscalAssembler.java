@@ -17,6 +17,7 @@ import com.vetor.niner.fiscal.motor.MotorTributarioDtos.OperacaoFiscal;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.RegraFiscal;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TipoDestinatario;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TipoOperacao;
+import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TotaisTributarios;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TributacaoResultado;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -78,9 +79,16 @@ public class VendaFiscalAssembler {
      *         rejeição chegar na SEFAZ por falta de dado básico), ou quando {@code incluirCpf=true}
      *         mas a venda não tem cliente/documento pra honrar a escolha do operador
      */
+    /**
+     * @param observacao 2026-09-01 — texto livre digitado pelo operador <b>antes de emitir</b>, que
+     *         entra no {@code infCpl} do XML e, por consequência, no DANFE. Decisão dele entre
+     *         digitar antes de emitir ou antes de imprimir: antes de imprimir a nota já está
+     *         autorizada, e o papel passaria a dizer algo que o arquivo da SEFAZ não diz.
+     *         {@code null}/vazio simplesmente não gera a linha.
+     */
     @Transactional(readOnly = true)
     public Optional<PedidoDeEmissao> montar(long idTenant, long idEmpresa, long idVenda, Integer idUsuario,
-                                            boolean incluirCpf) {
+                                            boolean incluirCpf, String observacao) {
         ConfigEmpresa config = buscarConfig(idEmpresa);
         if (config == null || !config.emiteNfce()) {
             return Optional.empty();
@@ -200,7 +208,10 @@ public class VendaFiscalAssembler {
                 // O PDV não tem campo de troco explícito hoje — pagamentos sempre fecham o saldo
                 // exato (split-tender). documento_fiscal.valor_troco é NOT NULL: zero é o valor
                 // correto quando não houve troco, não um placeholder.
-                BigDecimal.ZERO, null, responsavelTecnico, "Niner PDV 1.0"));
+                BigDecimal.ZERO,
+                montarInformacoesComplementares(idVenda, venda, buscarFormasDePagamento(idVenda),
+                        calculo.totais(), observacao),
+                responsavelTecnico, "Niner PDV 1.0"));
     }
 
     // ---------------------------------------------------------------- leituras
@@ -246,16 +257,124 @@ public class VendaFiscalAssembler {
 
     private VendaHeader buscarVenda(long idEmpresa, long idVenda) {
         return jdbc.sql("""
-                        SELECT id_cliente, data_venda FROM venda
-                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND id_venda = ?
+                        SELECT v.id_cliente, v.data_venda,
+                               f.id_funcionario AS codigo_vendedor, f.nome AS nome_vendedor
+                          FROM venda v
+                          LEFT JOIN funcionario f
+                            ON f.id_tenant = v.id_tenant AND f.id_funcionario = v.id_funcionario
+                         WHERE v.id_tenant = plataforma.tenant_atual()
+                           AND v.id_empresa = ? AND v.id_venda = ?
                         """)
                 .params(idEmpresa, idVenda)
                 .query((rs, n) -> new VendaHeader(
                         (Integer) rs.getObject("id_cliente"),
-                        rs.getObject("data_venda", OffsetDateTime.class)))
+                        rs.getObject("data_venda", OffsetDateTime.class),
+                        (Integer) rs.getObject("codigo_vendedor"),
+                        rs.getString("nome_vendedor")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Venda nº " + idVenda + " não encontrada."));
+    }
+
+    /**
+     * Nomes das carteiras usadas na venda, na ordem em que foram lançadas — o "FORMA PGTO" do
+     * campo de informações complementares.
+     *
+     * <p>⚠️ É o <b>nome da carteira</b> ("DINHEIRO", "CARTAO CREDITO"), não o {@code tPag} do XML:
+     * quem lê o DANFE é o lojista e o cliente, e "01" não diz nada a nenhum dos dois. O {@code tPag}
+     * continua indo no grupo {@code <pag>}, que é o que a SEFAZ lê.
+     */
+    private List<String> buscarFormasDePagamento(long idVenda) {
+        return jdbc.sql("""
+                        SELECT DISTINCT tc.nome_carteira
+                          FROM contas_receber cr
+                          JOIN tipo_carteira tc
+                            ON tc.id_tenant = cr.id_tenant AND tc.id_carteira = cr.id_carteira
+                         WHERE cr.id_tenant = plataforma.tenant_atual() AND cr.id_venda = ?
+                         ORDER BY tc.nome_carteira
+                        """)
+                .param(idVenda)
+                .query(String.class).list();
+    }
+
+    /**
+     * Monta o {@code infCpl} — o campo "INFORMAÇÕES COMPLEMENTARES" do DANFE (2026-09-01).
+     *
+     * <p>Até esta data o Nainer mandava <b>{@code null}</b>: o grupo {@code <infAdic>} nem era
+     * gerado, e o DANFE imprimia um travessão. O conteúdo aqui espelha o que o sistema anterior do
+     * lojista já emitia, mais duas linhas que ele pediu.
+     *
+     * <p>⭐ <b>O valor aproximado dos tributos vem para CÁ, e isso é o ponto</b> (pedido dele).
+     * Antes ele era desenhado só no DANFE, pelo React — ou seja, existia no papel e <b>não</b>
+     * existia no XML autorizado. A Lei 12.741/2012 exige a informação <b>no documento fiscal</b>;
+     * texto que só o React desenha não está no documento, está no retrato dele.
+     *
+     * <p>⭐ E a <b>observação do operador</b> entra aqui, no XML assinado — decisão dele em
+     * 2026-09-01, entre digitar antes de emitir ou antes de imprimir. Antes de imprimir a nota já
+     * está autorizada, e o DANFE passaria a mostrar um texto que a SEFAZ não tem: o papel diria uma
+     * coisa e o arquivo, outra.
+     */
+    private String montarInformacoesComplementares(long idVenda, VendaHeader venda,
+            List<String> formasPagamento, TotaisTributarios totais, String observacao) {
+        List<String> linhas = new ArrayList<>();
+
+        StringBuilder cabecalho = new StringBuilder("CONTRATO: ").append(idVenda);
+        if (!formasPagamento.isEmpty()) {
+            cabecalho.append(", FORMA PGTO: ").append(String.join(" / ", formasPagamento));
+        }
+        if (venda.nomeVendedor() != null) {
+            cabecalho.append(", VENDEDOR: ").append(venda.codigoVendedor()).append('-').append(venda.nomeVendedor());
+        }
+        linhas.add(cabecalho.append(';').toString());
+
+        if (observacao != null && !observacao.isBlank()) {
+            // ⛔ O operador digita num <textarea> e Enter produz "\n" — que o XSD do infCpl RECUSA
+            // (ver a nota no fim deste método). Sem esta troca, o mesmo defeito que a suíte pegou
+            // no separador voltaria pela porta do usuário, e aí só na venda real: bastaria alguém
+            // apertar Enter para a nota inteira ser rejeitada. Tabulação e CR entram na conta pelo
+            // mesmo motivo, e espaços repetidos viram um só para não desperdiçar o campo.
+            linhas.add("OBS.: " + observacao.replaceAll("\\s+", " ").strip());
+        }
+
+        if (totais.valorTotalTributos() != null && totais.valorTotalTributos().signum() > 0) {
+            linhas.add("Valor aproximado dos tributos: R$ " + real(totais.valorTotalTributos())
+                    + " (Lei 12.741/2012 - Fonte: IBPT).");
+        }
+
+        // Só aparece quando há o que declarar — enquanto as alíquotas da reforma estiverem em zero,
+        // uma linha "IBS: R$ 0,00" seria ruído num campo que o lojista lê todo dia.
+        if (totais.valorIbsUf() != null && (totais.valorIbsUf().signum() > 0
+                || (totais.valorCbs() != null && totais.valorCbs().signum() > 0))) {
+            BigDecimal ibs = totais.valorIbsUf().add(nzero(totais.valorIbsMun()));
+            linhas.add("REFORMA TRIBUTARIA (LC 214/2025) - BASE IBS/CBS: R$ " + real(totais.baseIbsCbs())
+                    + " | IBS: R$ " + real(ibs) + " | CBS: R$ " + real(totais.valorCbs()));
+        }
+
+        // ⛔ ESPAÇO, nunca "\n" — e isto foi MEDIDO, não deduzido (2026-09-01).
+        //
+        // O XSD oficial define infCpl como `[!-ÿ]{1}[ -ÿ]{0,}[!-ÿ]{1}|[!-ÿ]{1}`: a faixa começa no
+        // ESPAÇO (0x20), e a quebra de linha é 0x0A — fora dela. A primeira versão juntava com
+        // "\n" e o validador XSD recusou TODA nota com:
+        //
+        //   cvc-pattern-valid: o valor '…' não tem um aspecto válido em relação ao padrão
+        //   '[!-ÿ]{1}[ -ÿ]{0,}[!-ÿ]{1}|[!-ÿ]{1}' do tipo '#AnonType_infCplinfAdicinfNFeTNFe'
+        //
+        // ⭐ Quem pegou foi o F11 (bloqueio preventivo antes de transmitir) + a suíte: 5 testes
+        // que já existiam ficaram vermelhos na hora. Sem eles, a primeira venda real depois do
+        // deploy é que teria descoberto — com o cliente na frente.
+        //
+        // ⚠️ E as quebras que aparecem no DANFE do outro sistema NÃO estão no XML: quem quebra é a
+        // largura do campo no papel. Texto de uma linha só é o que o leiaute permite.
+        return String.join(" ", linhas);
+    }
+
+    private static BigDecimal nzero(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
+    }
+
+    /** 1234.5 → "1.234,50" — o formato que o lojista lê no papel. */
+    private static String real(BigDecimal v) {
+        return String.format(java.util.Locale.of("pt", "BR"), "%,.2f", nzero(v));
     }
 
     /**
@@ -642,7 +761,8 @@ public class VendaFiscalAssembler {
                                  String cidade, String uf, String cep, String telefone) {
     }
 
-    private record VendaHeader(Integer idCliente, OffsetDateTime dataVenda) {
+    private record VendaHeader(Integer idCliente, OffsetDateTime dataVenda,
+                               Integer codigoVendedor, String nomeVendedor) {
     }
 
     private record ItemBruto(BigDecimal qtd, BigDecimal precoVenda, BigDecimal valorDesconto,

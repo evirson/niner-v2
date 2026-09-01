@@ -20,6 +20,16 @@ import { fecharAoClicarNoFundo } from '../../lib/modais'
 const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMENTO'])
 
 /**
+ * Teto do texto de observações.
+ *
+ * ⚠️ O `infCpl` do XML aceita 5.000 caracteres, mas o campo carrega mais coisa além da observação
+ * (contrato, forma de pagamento, vendedor, tributos aproximados, reforma). 500 deixa folga larga e
+ * evita que o operador descubra o limite pela rejeição da SEFAZ, com o cliente na frente — é o
+ * bloqueio preventivo do F11 aplicado a um campo de digitação.
+ */
+const LIMITE_OBSERVACAO = 500
+
+/**
  * Situações que NÃO são erro para o operador — usado só para escolher a cor do toast.
  *
  * ⚠️ Separado de `SITUACOES_SUCESSO` de propósito: aquele conjunto também decide se o DANFE A4
@@ -123,6 +133,8 @@ export default function ComprovantePapeletaModal({
   /** Id do documento fiscal cujo DANFE A4 esta aberto — so NF-e 55 chega aqui. */
   const [danfeAberto, setDanfeAberto] = useState<number | null>(null)
   const [respondendoCpf, setRespondendoCpf] = useState(false)
+  /** Observações que o operador digita ANTES de emitir — vão para o `infCpl` do XML. */
+  const [observacaoNota, setObservacaoNota] = useState('')
   const [pedirCpfManual, setPedirCpfManual] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const danfceRef = useRef<HTMLDivElement>(null)
@@ -166,7 +178,7 @@ export default function ComprovantePapeletaModal({
   async function confirmarEmissao(incluirCpf: boolean) {
     setRespondendoCpf(true)
     try {
-      processarResultadoEmissao(await emitirNfce(idVenda, incluirCpf))
+      processarResultadoEmissao(await emitirNfce(idVenda, incluirCpf, observacaoNota))
     } catch (e) {
       // ⚠️ O catch mudo ENGOLIA a mensagem do servidor (2026-08-24). Um 409 dizendo "cadastre a
       // regra em Perfil Fiscal" virava "não foi possível falar com o serviço fiscal" — e o
@@ -329,6 +341,38 @@ export default function ComprovantePapeletaModal({
                     </li>
                   ))}
                 </ul>
+                {/* ⭐ Observações do operador — ANTES de emitir, nunca antes de imprimir
+                    (decisão dele, 2026-09-01). O texto vai para o `infCpl` do XML e, por
+                    consequência, para INFORMAÇÕES COMPLEMENTARES do DANFE: os dois dizem a mesma
+                    coisa. Depois da autorização o XML está assinado na SEFAZ, e acrescentar texto
+                    só ao papel faria o DANFE divergir do documento que de fato vale.
+
+                    ⚠️ Fica FORA do `if (documentoCliente)` de propósito: os dois caminhos de
+                    emissão (com e sem CPF) passam por aqui, e pôr o campo dentro de um deles
+                    deixaria metade das vendas sem como anotar nada — a família de
+                    "a mensagem mora onde o botão está". */}
+                {/* ⚠️ `<label>` puro + `.muted`, que é o padrão real deste projeto. Escrevi
+                    `className="campo"` e `campo-rotulo` na primeira versão — nenhuma das duas
+                    existe no styles.css, e classe inexistente NÃO dá erro em lugar nenhum: passa
+                    no tsc, no build e na suíte, e o campo só sai sem estilo. */}
+                <div style={{ marginBottom: 12 }}>
+                  <label htmlFor="pdv-observacao-nota">Observações da nota (opcional)</label>
+                  <textarea
+                    id="pdv-observacao-nota"
+                    value={observacaoNota}
+                    onChange={(e) => setObservacaoNota(e.target.value.slice(0, LIMITE_OBSERVACAO))}
+                    rows={2}
+                    disabled={respondendoCpf}
+                    placeholder="Ex.: Pedido 4471 — entrega combinada para sexta."
+                    style={{ width: '100%', resize: 'vertical' }}
+                  />
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    Sai em INFORMAÇÕES COMPLEMENTARES da nota e no XML enviado à SEFAZ — depois de
+                    emitida não dá mais para mudar. {LIMITE_OBSERVACAO - observacaoNota.length} caracteres
+                    restantes.
+                  </span>
+                </div>
+
                 {documentoCliente ? (
                   <>
                     <p>
