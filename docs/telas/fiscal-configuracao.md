@@ -123,9 +123,29 @@ recusa a alteração com 409 explicando por quê.
 
 | Campo (banco) | Rótulo | Componente | Regra |
 |---|---|---|---|
-| `csc_id` | Identificador do CSC (CSC ID) | texto | Opcional; ver nota abaixo |
-| `csc_token_cifrado` | Token do CSC | senha (write-only) | Nunca devolvido pelo `GET` |
+| `csc_id_homologacao` | ID do CSC — Homologação | texto | Opcional; ver nota abaixo |
+| `csc_token_homologacao_cifrado` | Token do CSC — Homologação | senha (write-only) | Nunca devolvido pelo `GET` |
+| `csc_id_producao` | ID do CSC — Produção | texto | Opcional |
+| `csc_token_producao_cifrado` | Token do CSC — Produção | senha (write-only) | Nunca devolvido pelo `GET` |
+| `csc_id` / `csc_token_cifrado` | *(legado)* | — | Colunas anteriores à V105, mantidas como fallback de leitura enquanto o lojista não reconfigurar. Não são mais gravadas pela tela. |
 | `versao_tabela_ibpt` | Versão da tabela IBPT | texto somente-leitura | Rastreabilidade F9; preenchido pela rotina de carga, não digitado |
+
+### ⭐ CSC é POR AMBIENTE (V105, 2026-08-31)
+
+A SEFAZ credencia **um CSC para homologação e outro para produção**, e o de um **não vale no
+outro**. Até a V105 havia um par só por empresa, com o ambiente num campo à parte — e virar
+HOMOLOGACAO → PRODUCAO no go-live manteria o CSC de homologação, rejeitando **toda** NFC-e com
+`cStat 464` ("Código de Hash no QR-Code difere do calculado"), no primeiro dia de operação real e
+com um erro que **não menciona CSC em lugar nenhum**.
+
+⚠️ **Os dois pares são pedidos na MESMA tela, de propósito.** Pedir só o do ambiente corrente
+obrigaria o lojista a virar para produção **antes** de ter o CSC de lá, e ficar sem emitir até
+acertar. A tela marca qual está *(em uso)* e avisa em vermelho quando o ambiente é PRODUÇÃO e o CSC
+de produção está vazio — a hora de descobrir isso é antes de vender, não na primeira venda.
+
+⛔ **O backfill NÃO copiou para os dois ambientes:** o par que existia foi para o ambiente em que a
+empresa estava. Inventar um CSC de produção faria a tela *afirmar* que está configurado — o defeito
+original com uma mentira a mais.
 
 ⚠️ **O CSC é dado de credenciamento, não de montagem.** Com o QR Code v3.00 (DF17) o CSC saiu do
 cálculo do QR, mas **não foi extinto** — o portal do PR ainda o exige no credenciamento. Está aqui

@@ -11,6 +11,53 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (9) — CSC POR AMBIENTE (V105), e o diagnóstico do `cStat 464` dele
+>
+> > *"Efetivei a venda 628, na hora que fui emitir a NFC-e deu este erro: A SEFAZ rejeitou a nota:
+> > Codigo de Hash no QR-Code difere do calculado (464)."*
+>
+> ### O diagnóstico: não era bug, e o que provou foi o RELÓGIO
+>
+> A mensagem do sistema já culpava o CSC — mas aceitar isso sem medir seria inferência. O que foi
+> medido, em ordem:
+>
+> | O quê | Resultado |
+> |---|---|
+> | Algoritmo do QR Code | ✅ confere com a NT 2015.002 v2 |
+> | QR Code enviado | ✅ chave 44, versão 2, tpAmb 2, idCSC `1`, hash 40 hex |
+> | Tamanho do CSC gravado | ✅ 36 caracteres (por subtração no `octet_length`, sem revelar o valor) |
+> | **35 NFC-e autorizadas**, a última | **24/08 às 20:01** |
+> | Configuração fiscal alterada | **24/08 às 21:31** |
+> | Depois disso | **7 emissões, 7 rejeições `464`** |
+>
+> Tudo certo **menos o valor**, e o corte é exato: funcionava até aquele salvamento. ⭐ **A conta que
+> fechou o caso foi de data, não de código** — nenhuma leitura do algoritmo teria apontado isso.
+>
+> ### ⛔ E o defeito de desenho que a investigação revelou
+>
+> `fiscal_config_empresa` guardava **UM** par `csc_id`/`csc_token` por empresa, com `ambiente` num
+> campo à parte. Mas a SEFAZ credencia **CSCs diferentes** para homologação e produção.
+>
+> No go-live, ao virar a chave, o CSC de homologação continuaria gravado e **toda NFC-e seria
+> rejeitada com este mesmo 464** — no primeiro dia de operação real, com cliente no caixa, e com um
+> erro que fala de "hash do QR-Code" e não menciona CSC em lugar nenhum.
+>
+> **V105:** colunas por ambiente, backfill do par existente **para o ambiente em que a empresa está**.
+> ⛔ Copiar para os dois inventaria um CSC de produção que ninguém cadastrou — e a tela passaria a
+> *afirmar* que está configurado, que é o defeito original com uma mentira a mais.
+>
+> A tela pede **os dois pares, juntos**: pedir só o do ambiente corrente obrigaria o lojista a virar
+> para produção **antes** de ter o CSC de lá, e ficar sem emitir até acertar. E avisa em vermelho
+> quando o ambiente é PRODUÇÃO e o CSC de produção está vazio.
+>
+> ⚠️ **O teste que pega o defeito é o NEGATIVO:** um PUT que só muda a série chega com os dois tokens
+> em branco (a tela nunca os devolve, F7) e zeraria os dois em silêncio. Sabotado, ele reprova:
+> *JSON path "$.cscConfiguradoHomologacao" expected:&lt;true&gt; but was:&lt;false&gt;*.
+>
+> ⚠️ **E o `mvn compile` incremental MENTIU:** passou com o arquivo quebrado (`illegal escape
+> character` num `\s` que o script escreveu sem escapar). Só o `clean compile` acusou.
+>
+>
 > ## 📌 2026-08-31 (8) — NUMERAÇÃO POR AMBIENTE (V106): cada nota de teste queimava um número real
 >
 > Ele pediu duas coisas: *"para a NFS-e tem que emitir em homologação, pois ainda estamos com o ERP

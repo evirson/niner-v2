@@ -11,7 +11,29 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-08-31.** Entrou o **módulo NFS-e** (V099–V102, sessão de outra máquina):
+> **Última revisão: 2026-08-31 (fechamento do dia).** Estado medido: **1168 testes verdes, 0 falhas**
+> · migrations até **V106** · **60 telas** em `cfg_tela` · `tsc -b` limpo · build do front OK.
+> **21 commits meus**, mais os 6 do Evirson (NFS-e).
+>
+> O dia teve quatro partes:
+> 1. **O Evirson entregou a NFS-e Nacional** e **emitiu e cancelou uma nota EM PRODUÇÃO** (nº 7308).
+>    Fechou as pendências **73** e **74** que eu abrira de manhã; a **72** ficou pela metade — falta
+>    o PDV emitir, e ele mesmo declara na spec *"Status: Parcial (falta o PDV)"*.
+> 2. **Fechei a bola minha**: relatório de OS (**56**, V104), o arquivamento que se travava num laço
+>    (**67**, e achei dois casos irmãos), o PDF que travava em aba oculta (**7**), a Lucratividade
+>    (**5**), e a pendência **12** foi **medida** (eram 18 popups sem ✕, corrigi 5, restam 13).
+> 3. ⭐ **ABRI AS TELAS NO NAVEGADOR pela primeira vez** — e isso achou o que 6 testes verdes, o
+>    `tsc -b` e os meus scripts não pegavam: o relatório de OS **não gerava nenhuma vez**, o
+>    "Confirmar Entrada" ficava cinza por **13 motivos** com mensagem para **2**, e a coluna Tempo
+>    Médio saía vazia com o dado existindo.
+> 4. **Quatro relatos dele viraram correção**, e três eram defeitos de verdade — ver o bloco
+>    "Aberto/fechado em 2026-08-31" abaixo.
+>
+> ⛔ **O que mais importa para amanhã, e é bola DELE:** a NFC-e **não emite** até o CSC de
+> homologação ser redigitado (item **75**), e há **7 números fiscais queimados** esperando decisão
+> (item **76**).
+>
+> **Revisão anterior: 2026-08-31 (manhã).** Entrou o **módulo NFS-e** (V099–V102, sessão de outra máquina):
 > S5 pronto no banco, S5.5 pela metade e o **motor do S6 construído — porém sem controller, sem
 > tela e sem chamador**, e com a máquina de emissão ainda **sem nenhum teste**. Os três buracos
 > estão em `docs/MODULONFSE.md` §1 e viraram os itens **72–74** aqui. No mesmo dia foi atacada a
@@ -95,6 +117,56 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 
 ---
 
+
+---
+
+## 🔴 Aberto em 2026-08-31 (fechamento) — o que precisa de VOCÊ
+
+### 75. 🔵 A NFC-e não emite: o CSC de homologação gravado não é o credenciado
+**Bloqueia a emissão hoje.** A venda 628 (e as 6 anteriores desde 24/08) voltou com
+`cStat 464 — "Código de Hash no QR-Code difere do calculado"`.
+
+**Diagnóstico medido, não inferido:**
+
+| O quê | Resultado |
+|---|---|
+| Algoritmo do QR Code | ✅ confere com a NT 2015.002 v2 |
+| QR Code enviado | ✅ chave 44, versão 2, tpAmb 2, idCSC `1`, hash 40 hex |
+| Tamanho do CSC gravado | ✅ 36 caracteres |
+| **35 NFC-e autorizadas**, a última em | **24/08 às 20:01** |
+| Configuração fiscal alterada em | **24/08 às 21:31** |
+| Desde então | **7 emissões, 7 rejeições 464** |
+
+Tudo certo **menos o valor**, e o corte é exato: funcionava até aquele salvamento.
+
+**Ação:** redigitar o CSC em Fiscal › Configuração Fiscal, copiando de novo do portal da SEFAZ.
+⚠️ Cuidado com espaço ou quebra de linha na seleção — o `trim` que protege disso só entrou em 29/08.
+⚠️ **Se voltar 464 com o CSC recém-copiado, me avise:** aí a causa é outra e eu volto a investigar.
+
+### 76. 🔵 Sete números de NFC-e queimados (52 a 58) esperando decisão
+O último **autorizado** é o **51**; de 52 a 58 são as rejeições por CSC. Rejeitada não consome
+numeração na SEFAZ, mas o nosso contador avançou. Se o Fisco cobrar a sequência, esses sete entram
+numa **inutilização de faixa** (a tela existe: Fiscal › Inutilização).
+
+⭐ **A partir da V106 isso não se repete no go-live:** a numeração passou a ser **por ambiente**, e
+a produção começará do 1 sem herdar nada da homologação.
+
+### 77. 🔵 NFS-e ainda não tem linha de configuração
+`fiscal_config_nfse` está vazia para a empresa 1. O default do sistema é **HOMOLOGACAO** (produção
+restrita do Sefin Nacional), então não há risco de emitir em produção por engano — mas enquanto não
+houver configuração, `emite_nfse` é `false` e nada sai.
+
+**Ação:** configurar em Fiscal › NFS-e (a tela existe, é a entrega do Evirson).
+
+### 78. 🟢 Ligar a emissão de NFS-e pelo PDV — trabalho meu, esperando seu ok
+É a segunda metade da **72**. A máquina está pronta e emitiu em produção; falta o chamador na venda.
+⚠️ **Tem uma decisão de produto embutida:** *uma NFS-e por código de serviço distinto da venda* —
+banho e tosa + consulta veterinária na mesma venda geram **duas** notas, o que **quebra** a
+invariante "uma nota por venda" que a V082 fixou para a NFC-e. Está escrito na spec dele; confirme
+antes de eu ligar.
+
+**Enquanto não estiver ligado**, a venda mista **avisa** o que ficou de fora (feito hoje): *"Esta
+venda tem R$ X em SERVIÇOS, que não entram na NFC-e… emita pelo portal da sua prefeitura."*
 ## 🔵 Bola dele (dono do produto)
 
 ### 5. ✅ Tela de Lucratividade — ABERTA em 2026-08-31, e tinha defeito
@@ -1204,3 +1276,46 @@ de construir a nota em cima dela. Trava mesmo só o S6/S7.
 localizados e **não** lidos) e montar/assinar uma DPS localmente — o certificado A1 da MITRYUSCASH já
 está cifrado no banco. Mas isso é preparação, **não** é prova: *"o XSD não é o contrato da SEFAZ"*
 (no B9 a nota passou no schema e voltou `cStat 1010`).
+
+---
+
+## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-08-31)
+
+> ⚠️ **Apresentar assim, agrupado — nunca as ~29 linhas cruas.** Ele já disse *"TA MUITO CONFUSO"*.
+
+### 🔴 Trava a operação AGORA (bola dele)
+- **75 — A NFC-e não emite.** O CSC de homologação gravado não é o credenciado; redigitar em Fiscal
+  › Configuração Fiscal. Foi medido: funcionava até 24/08 às 20:01 e a config mudou às 21:31.
+- **76 — 7 números queimados (52 a 58).** Decidir se inutiliza a faixa.
+
+### 🔵 Decisão de produto (bola dele)
+- **77** — configurar a NFS-e (a tela existe; default já é homologação).
+- **78** — autorizar eu ligar a NFS-e no PDV, **confirmando** a regra "uma NFS-e por código de
+  serviço distinto" (quebra o "uma nota por venda" da NFC-e).
+- **12** — os **13** popups restantes sem ✕ (todos de confirmação/criação rápida, onde o ✕ concorre
+  com o "Cancelar").
+- **11** — cobrança da assinatura desligada · **28** — planos pagos não definidos.
+- **14 / 69** — devolução não estorna comissão, taxa nem acréscimo.
+- **17** — estorno não revoga assinatura · **47** — lead grava consentimento não dado.
+- **22 (SVC)** · **23 (CSOSN 500, depende do contador)** · **66 (ano na inutilização)**.
+- **26** — os adiados de 21/08: **nenhum é meu** (21+32 dependem de homologação; 25 e 26+30 são
+  decisão sua).
+- **49** — credenciais para homologar a NFS-e (o compromisso da segunda-feira).
+
+### 🟢 Trabalho meu, posso fazer quando você mandar
+- **78** — ligar a NFS-e no PDV (depende da confirmação acima).
+- **54** — agenda da OS (depende de decisões suas) e executor por linha.
+- **71** — número fiscal queimado sem registro entre reservar e gravar.
+- **29** — tela de contratação com escolha de grupo.
+- **40** — teto de tentativas no login do backoffice.
+- Da lista que ele aprovou com *"siga"*, ainda **não** feitos: **concorrência real** (nenhum
+  `FOR UPDATE` foi exercitado com duas transações), **contrato TS↔Java por endpoint**,
+  **`configuracao/importacao/`** (17 arquivos que ninguém leu) e **`AjudaDaTela.tsx`** (1.458 linhas
+  que afirmam comportamento e nunca foram conferidas).
+
+### ⏭️ Só se resolve fora do código
+- **6, 8, 9, 10, 65** — impressão no papel (térmica, A4, etiqueta).
+- **60, 71, 1** — dependem de transmitir em homologação na SEFAZ.
+- **68** — o limite declarado: telas nunca abertas. ⭐ **Encolheu hoje** — abri Sangria, Minha Conta,
+  Relatório de Contas a Pagar, Parâmetros do Sistema, Fechamento de Caixa, Entrada de Produtos,
+  Produto, Configuração Fiscal, PDV, OS e o relatório novo. Faltam Devolução, Orçamento e 2FA.
