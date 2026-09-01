@@ -325,7 +325,11 @@ public class VendaFiscalAssembler {
         if (venda.nomeVendedor() != null) {
             cabecalho.append(", VENDEDOR: ").append(venda.codigoVendedor()).append('-').append(venda.nomeVendedor());
         }
-        linhas.add(cabecalho.append(';').toString());
+        // ⚠️ Sem o ";" do fim: ele existia para separar do que vinha depois, e desde que as partes
+        // passaram a ser unidas por " | " ele virou "; |" — dois separadores colados, visto na
+        // nota 31. O modelo do outro sistema usa ";" porque lá a separação é quebra de linha, que
+        // o XSD do infCpl não aceita (ver a nota no fim deste método).
+        linhas.add(cabecalho.toString());
 
         if (observacao != null && !observacao.isBlank()) {
             // ⛔ O operador digita num <textarea> e Enter produz "\n" — que o XSD do infCpl RECUSA

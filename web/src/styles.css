@@ -1573,6 +1573,28 @@ a.menu-card:hover {
   background: #fff; color: #000; padding: 6mm; margin: 0 auto;
   width: 210mm; box-sizing: border-box;
   font-family: Arial, Helvetica, sans-serif; font-size: 7pt; line-height: 1.25;
+  /* Âncora da marca d'água. ⚠️ Só a MARCA é absoluta — o conteúdo continua no fluxo normal.
+     Tornar o documento inteiro absoluto é o que fazia o A4 imprimir uma página e descartar o
+     resto, em silêncio (ver feedback_documento_a4_precisa_paginar). */
+  position: relative;
+}
+
+/* Marca d'água de homologação, na diagonal — exigência do MOC e igual ao modelo do outro sistema.
+   ⛔ TEXTO, nunca background-image: background não sai na impressão, e este é exatamente o aviso
+   que não pode faltar no papel. `print-color-adjust: exact` é o par obrigatório disso.
+   ⚠️ Ela pinta ACIMA do conteúdo, e não dá para inverter: elemento posicionado pinta sobre o
+   conteúdo em fluxo, e `z-index: -1` a esconderia atrás do fundo branco de `.danfe-preview`. Quem
+   garante a legibilidade da nota é o ALPHA — 13% deixa o texto por baixo aparecer inteiro. É por
+   isso que a cor é `rgba` e não um cinza sólido, que taparia o que estivesse embaixo.
+   ⚠️ `pointer-events: none` para a marca não roubar o clique dos campos que ela cobre. */
+.danfe-marca-dagua {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%) rotate(-35deg);
+  transform-origin: center;
+  font-size: 34pt; font-weight: bold; white-space: nowrap;
+  color: rgba(0, 0, 0, .13);
+  pointer-events: none; user-select: none; z-index: 0;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .danfe-preview .mono { font-family: 'Courier New', Courier, monospace; }
 

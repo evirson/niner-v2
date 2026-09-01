@@ -89,9 +89,25 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?:
       </div>
 
       {d.homologacao && (
-        <div className="danfe-tarja-homologacao">
-          NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO — SEM VALOR FISCAL
-        </div>
+        <>
+          {/* ⭐ MARCA D'ÁGUA em diagonal, como no modelo que ele mandou (2026-09-01). O texto é o
+              mesmo do exemplo: "NFe sem Valor Fiscal - Homologação".
+
+              ⚠️ É TEXTO, não `background-image`: background não sai na impressão (o navegador
+              descarta por padrão), e este é justamente o aviso que não pode faltar no papel — uma
+              nota de homologação impressa sem ele parece uma nota de verdade. Ver
+              feedback_impressao_background_nao_sai; `print-color-adjust: exact` no CSS é o par
+              obrigatório disso.
+
+              ⚠️ `aria-hidden`: a tarja logo abaixo já diz a mesma coisa em texto normal, e um
+              leitor de tela lendo as duas repetiria o aviso. */}
+          <div className="danfe-marca-dagua" aria-hidden="true">
+            NFe sem Valor Fiscal - Homologação
+          </div>
+          <div className="danfe-tarja-homologacao">
+            NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO — SEM VALOR FISCAL
+          </div>
+        </>
       )}
 
       {/* ---------------------------------------------------------------- cabeçalho */}
