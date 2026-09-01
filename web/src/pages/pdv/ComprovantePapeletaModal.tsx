@@ -217,7 +217,25 @@ export default function ComprovantePapeletaModal({
    * (`VendaFiscalAssembler.montar`). Até 2026-08-25 o popup não dizia isso, e o operador escolhia
    * entre dois documentos fiscalmente diferentes sem saber.
    */
-  const modeloSeIdentificar = ehPessoaFisica ? 'NFC-e' : 'NF-e (modelo 55)'
+  /**
+   * ⭐ Venda 100% SERVIÇO não gera NFC-e nenhuma — o documento dela é a NFS-e (2026-09-01, relato
+   * dele: *"na hora de emitir pede pra emitir apenas NFC-e, e não tem produto"*).
+   *
+   * ⛔ O popup dizia "Sim, identificar — NFC-e" numa venda sem uma única mercadoria, e depois
+   * respondia que *"NFC-e é documento de mercadoria"*. Ou seja: a tela oferecia um documento que
+   * ela mesma ia recusar em seguida — o operador escolhia entre duas opções erradas e só descobria
+   * depois de clicar. Isso não é detalhe de texto: é a tela contradizendo o próprio sistema.
+   *
+   * ⚠️ A pergunta do CPF CONTINUA fazendo sentido aqui, e é por isso que ela não sumiu: o tomador
+   * da NFS-e também é identificado (ou não) pelo documento do cliente. O que muda é o NOME do
+   * documento que vai sair.
+   */
+  const itensDaVenda = comprovante?.itens ?? []
+  const vendaSoDeServico = itensDaVenda.length > 0 && itensDaVenda.every((i) => i.tipoItem === 'SERVICO')
+
+  const modeloSeIdentificar = vendaSoDeServico
+    ? 'NFS-e'
+    : ehPessoaFisica ? 'NFC-e' : 'NF-e (modelo 55)'
 
   // ⚠️ `dadosFiscais` presente NÃO significa "tem QR Code" (2026-08-29): a NF-e 55 da venda a
   // pessoa jurídica é autorizada, tem chave e protocolo, e mesmo assim `qrCodeUrl` vem `null` —
@@ -380,7 +398,14 @@ export default function ComprovantePapeletaModal({
                       {mascararCpfCnpj(documentoCliente, clienteFisicaJuridica)}
                     </p>
                     <p>Deseja identificar o cliente nesta nota fiscal?</p>
-                    {!ehPessoaFisica && (
+                    {vendaSoDeServico && (
+                      <p className="muted" style={{ marginTop: -4 }}>
+                        Esta venda é <strong>só de serviços</strong>: o documento dela é a{' '}
+                        <strong>NFS-e</strong> — NFC-e e NF-e são documentos de mercadoria e não serão
+                        emitidas.
+                      </p>
+                    )}
+                    {!vendaSoDeServico && !ehPessoaFisica && (
                       <p className="muted" style={{ marginTop: -4 }}>
                         Cliente com CNPJ: ao identificar, a nota sai como <strong>NF-e modelo 55</strong>, que a
                         empresa pode usar para crédito. Sem identificar, sai <strong>NFC-e</strong> ao consumidor.
@@ -391,7 +416,9 @@ export default function ComprovantePapeletaModal({
                         {respondendoCpf ? 'Emitindo…' : `Sim, identificar — ${modeloSeIdentificar}`}
                       </button>
                       <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => confirmarEmissao(false)}>
-                        Não, emitir para consumidor — NFC-e
+                        {vendaSoDeServico
+                          ? 'Não, emitir sem identificar — NFS-e'
+                          : 'Não, emitir para consumidor — NFC-e'}
                       </button>
                       {pedirCpfManual && (
                         <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => setPedirCpfManual(false)}>
