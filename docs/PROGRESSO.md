@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-01 (a lista 🟢 inteira — teto no login do backoffice V107, contagem de telas derivada, NFS-e pelo PDV, número queimado com rastro, as duas primeiras corridas de concorrência; e o DANFE como o modelo dele: `infCpl` no XML, observações antes de emitir, CODE-128C da chave e marca d'água)
+**Última atualização:** 2026-09-01 (3) — a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,106 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-01 (3) — A NFC-e VOLTOU A EMITIR, e o dia inteiro foi de defeitos que só a TELA mostra
+>
+> **Medido:** **1190 testes verdes, 0 falhas** · `tsc -b` limpo · migrations até **V107** (nenhuma
+> nova hoje) · **7 documentos fiscais emitidos, 7 autorizados, 0 rejeitados**.
+>
+> ### ✅ O bloqueio da operação caiu: ele redigitou o CSC (#75)
+>
+> Ele avisou que emitiu e pediu para eu testar. Testei de ponta a ponta pelo PDV: venda **638**,
+> **NFC-e nº 62 AUTORIZADA**. A última rejeição `464` tinha sido ontem às 19:54, na nº 58.
+>
+> ### ⛔ E o teste achou um defeito MEU de ontem, na mesma feature que eu tinha "terminado"
+>
+> Digitei uma observação no popup de emissão. Ela foi para o XML — e **não saiu no cupom**. O
+> `DanfceImprimir.tsx` **remontava no React** um texto parecido com o do `infCpl`, em vez de ler o
+> que a SEFAZ recebeu. Ontem eu liguei essa leitura no **DANFE A4** e **não varri a outra ponta**:
+> é literalmente o defeito nº 1 deste projeto, cometido no dia seguinte à lição.
+>
+> Hoje o cupom mostra o `infCpl` do XML assinado, com **caminho para nota antiga** (o XML de antes
+> de ontem não tem a tag; ali o texto anterior continua sendo melhor que uma área em branco —
+> conferido nas vendas 638 **e** 629). O desescape virou **fonte única** em `XmlFiscal.desescapar`,
+> junto do escape que ele desfaz: eram dois leitores em pacotes diferentes com a mesma cópia.
+>
+> ⭐ **Abrir a tela achou ainda outra coisa** que nem o teste nem eu tínhamos visto: com o `infCpl`
+> impresso, o *"Fonte: IBPT"* aparecia **duas vezes**, gastando uma das 42 colunas da bobina.
+>
+> ### ⛔⛔ "Failed to read request" — a tela de NFS-e NUNCA conseguiu salvar
+>
+> Ele mandou o erro. A causa foi **isolada campo a campo** contra a API: o `@RequestBody` era o DTO
+> de **leitura** (`Config`), que tem três componentes **primitivos** (`long idEmpresa`,
+> `boolean configurado`, `int crt`). O Jackson exige os três; o front — corretamente — manda só os
+> campos editáveis. **Faltando qualquer um → 400. Com os três → passa.** E a mensagem não diz qual
+> campo, então não havia como diagnosticar pela tela.
+>
+> ⭐ **Por que a suíte estava verde:** todos os testes de NFS-e configuravam por `INSERT` direto
+> (`configurarNfse`), então **nenhum passava pelo endpoint**. Atalho no setup do teste não é
+> economia — é o caminho de produção deixando de ser exercitado. Ver
+> [[feedback_setup_de_teste_por_insert_nao_exercita_o_endpoint]].
+>
+> **A correção não foi trocar os primitivos por wrappers**, foi separar **entrada de saída**:
+> `SalvarConfig` tem só os campos editáveis, com wrappers, e cada ausência é recusada **nomeando o
+> campo**. Reusar o DTO de leitura tinha um segundo problema, pior: metade dos campos dele é
+> derivada (`configurado`, `crt`, `cnpj`, `ultimoTeste*`) — aceitá-los no corpo é oferecer ao
+> cliente campos que o servidor calcula e ignora em silêncio.
+>
+> ⚠️ **Um segundo defeito veio junto:** sem validação, o nulo chegava ao `INSERT` numa coluna
+> `NOT NULL` e a violação saía pelo handler global como *"Registro em uso por outro cadastro — não
+> pode ser excluído"* — mensagem sobre **exclusão de cadastro** para quem salvava configuração.
+>
+> ### ⭐⭐ `dhEmi` levava a hora da VENDA — e isso quebraria o go-live (#81)
+>
+> Investigando os números queimados, apareceu o que produziu as rejeições **59 e 60**:
+> `VendaFiscalAssembler` mandava `venda.dataVenda()` como data de emissão, e a SEFAZ recusa com
+> **`cStat 704` — "NFC-e com Data-Hora de emissão atrasada. Tolerância de até 5 minutos"**. As três
+> tentativas da venda 628 saíram com `dhEmi 19:54:34`; as de 20:38 e 20:40 não tinham como passar.
+>
+> **Quem isso atingia não era só a retransmissão:** a loja com `cfg_emite_fiscal_apos_venda`
+> desligado emite depois **por escolha** — ali toda nota nasceria rejeitada, queimando um número por
+> tentativa. ⭐ E a varredura mostrou que **as duas devoluções já usavam `now()`**: a venda é que era
+> a exceção.
+>
+> ⭐ **Provado contra a SEFAZ, não só por teste** — a diferença entre defeito provado e causa
+> provada: venda **639**, `data_venda` recuada em **3 horas**, emissão pela tela → **NFC-e nº 63
+> AUTORIZADA**, com `data_venda 12:16:35` e `dhEmi 15:16:50`. O mesmo cenário devolvia `704` ontem.
+>
+> ### ✅ E os números queimados (#76) não eram o que pareciam
+>
+> Medido: **as 96 notas deste banco são todas de HOMOLOGAÇÃO** — zero em produção —, e
+> `fiscal_numeracao` só tem linha de homologação. Numeração de homologação não é cobrada pelo
+> Fisco, e a produção **nasce no número 1** graças à V106 de ontem. Não há o que inutilizar.
+>
+> ### As outras correções do dia
+>
+> - **✕ fora do canto em 3 popups** (orçamento ×2, OS): o `CabecalhoModal` **já é** um
+>   `lightbox-topo` inteiro e estava aninhado dentro de outro, virando um flex item que encolhe ao
+>   conteúdo — o `space-between` não tinha espaço para distribuir. Varri o front: não havia outro.
+> - **2FA dizia "Conferindo…" ao reenviar** — um `carregando` só para as duas ações.
+> - **DANFE**: a tarja horizontal saiu (decisão dele; o modelo tem só a marca d'água), e a marca
+>   d'água **perdeu o `aria-hidden`** — ele só fazia sentido enquanto a tarja repetia o aviso para
+>   leitor de tela. Virando o aviso único, escondê-lo trocaria repetição por omissão.
+>
+> ### 📸 O #68 encolheu: Devolução, Orçamento e 2FA abertos no navegador
+>
+> Restava essa lista, e ela caiu. Do 2FA ficou **um** passo sem exercitar: digitar o código correto
+> — o classificador de segurança bloqueou (proteção contra bypass de autenticação) e não contornei.
+> O resto foi medido **no banco**: código errado deixa `tentativas = 1` gravado e o reenvio **não
+> zera** (`tentativas 1, reenvios 1`). As duas correções de 27/08 estão de pé.
+>
+> ### ⚠️ O que ficou declarado, não escondido
+>
+> - **`plataforma.codigo_login` não tem expurgo nenhum**: cresce para sempre e guarda hash e IP de
+>   contas já excluídas (apareceu ao excluir o usuário de teste — a tabela não tem FK para
+>   `usuario`).
+> - **A tolerância da NF-e 55 não foi medida** — a regra dos 5 minutos é da NFC-e; `now()` é válido
+>   para os dois, mas o limite do 55 eu não conferi.
+> - **Um `simples_anexo` gravou NULL duas vezes** com a tela mostrando "Anexo III", e **não
+>   reproduziu** nas medições controladas seguintes (payload capturado: `"III"`, gravou `III`).
+>   Suspeita de nós dois clicando na mesma tela; fica avisado em vez de fechado como resolvido.
+>
+> ---
 
 > ## 📌 2026-09-01 (2) — O DANFE COMO O MODELO DELE: `infCpl`, observações, código de barras e marca d'água
 >

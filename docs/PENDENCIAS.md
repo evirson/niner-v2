@@ -11,8 +11,24 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-09-01.** Estado medido: **1187 testes verdes, 0 falhas** · migrations até
-> **V107** · `tsc -b` limpo · **11 commits**, sem push.
+> **Última revisão: 2026-09-01 (3).** Estado medido: **1190 testes verdes, 0 falhas** · migrations
+> até **V107** · `tsc -b` limpo · **7 documentos fiscais hoje, 7 autorizados, 0 rejeitados**.
+>
+> 🔴→✅ **O que travava a operação CAIU:** ele redigitou o CSC e a **NFC-e voltou a emitir** (#75),
+> confirmado por mim de ponta a ponta (venda 638 → nota 62 autorizada). E o **#76 fechou por
+> medição**: as 96 notas do banco são todas de homologação, a produção nasce no número 1 (V106) e
+> não há faixa a inutilizar.
+>
+> ⛔ **Dois defeitos graves apareceram ao testar, e os dois estavam invisíveis para a suíte:**
+> a tela de **NFS-e nunca conseguiu salvar** (o `@RequestBody` era o DTO de leitura, com três
+> componentes primitivos → *"Failed to read request"*), e o **`dhEmi` levava a hora da venda**
+> (`cStat 704`, item **81**) — este quebraria o go-live de toda loja que emite depois da venda.
+> Os dois corrigidos e provados: o segundo **contra a SEFAZ**, com uma venda de 3 h atrás
+> autorizando.
+>
+> ⛔ **E um defeito meu, do dia anterior:** gravei o `infCpl` e liguei a leitura **só no DANFE A4**;
+> o cupom da NFC-e continuava remontando o texto no React, e a observação do operador não saía no
+> papel. Corrigir uma ponta e não varrer as outras, no dia seguinte à lição.
 >
 > **Ele mandou fazer a lista 🟢 inteira**, e depois trouxe uma tarefa própria (dois PDFs de DANFE).
 > Fecharam: **#40** (teto no login do backoffice + o oráculo de tempo, V107), **#79** (contagem de
@@ -163,13 +179,47 @@ Tudo certo **menos o valor**, e o corte é exato: funcionava até aquele salvame
 ⚠️ Cuidado com espaço ou quebra de linha na seleção — o `trim` que protege disso só entrou em 29/08.
 ⚠️ **Se voltar 464 com o CSC recém-copiado, me avise:** aí a causa é outra e eu volto a investigar.
 
-### 76. 🔵 Sete números de NFC-e queimados (52 a 58) esperando decisão
-O último **autorizado** é o **51**; de 52 a 58 são as rejeições por CSC. Rejeitada não consome
-numeração na SEFAZ, mas o nosso contador avançou. Se o Fisco cobrar a sequência, esses sete entram
-numa **inutilização de faixa** (a tela existe: Fiscal › Inutilização).
+### 76. ✅ Números queimados — **não há o que inutilizar** (medido em 2026-09-01)
+O item nasceu de 52 a 58 (rejeições por CSC), e cresceu para 52–60 (as duas do `cStat 704`). **Não
+importa:** medido no banco, **as 96 notas deste ambiente são todas de HOMOLOGAÇÃO** — zero em
+produção —, e `fiscal_numeracao` só tem linha de homologação (65 → 63, 55 → 32). Numeração de
+homologação **não é cobrada pelo Fisco**, e inutilizar faixa lá não produz efeito nenhum.
 
-⭐ **A partir da V106 isso não se repete no go-live:** a numeração passou a ser **por ambiente**, e
-a produção começará do 1 sem herdar nada da homologação.
+⭐ **E a produção nasce limpa:** desde a V106 a numeração é **por ambiente**, então a primeira nota
+real sairá com o número **1**, sem herdar nada da homologação. Sem esta correção, é aqui que o
+go-live teria começado no 63 com um buraco de 62 números atrás.
+
+⚠️ O que sobra deste item é o **defeito que produziu as duas últimas rejeições**, e ele é de código,
+não de decisão: ver o item **81**.
+
+### 81. ✅ `dhEmi` levava a hora da VENDA — **RESOLVIDO em 2026-09-01**, provado contra a SEFAZ
+`VendaFiscalAssembler:203` passa `venda.dataVenda()` como data de emissão da nota. Medido nas
+tentativas da venda 628: as três saíram com `dhEmi 2026-08-31T19:54:34`, e as de **20:38** e
+**20:40** voltaram **`cStat 704` — "NFC-e com Data-Hora de emissão atrasada. Tolerância de até 5
+minutos"**.
+
+**Quem isso atinge:** toda nota emitida mais de 5 minutos depois da venda — retransmissão após
+falha, e principalmente a loja com `cfg_emite_fiscal_apos_venda` **desligado**, que emite depois.
+⚠️ E **cada tentativa queima um número**, então o sintoma piora sozinho.
+
+**A correção:** `VendaFiscalAssembler` passou a mandar `OffsetDateTime.now()`. ⭐ As duas devoluções
+(`DevolucaoFiscalAssembler`, `DevolucaoCompraFiscalAssembler`) **já faziam assim** — a venda é que
+era a exceção.
+
+⭐ **Provado contra a SEFAZ, não só por teste** (é a diferença entre defeito provado e causa
+provada): venda **639** criada no PDV, `data_venda` recuada em **3 horas** por SQL, emissão pela
+tela → **NFC-e nº 63 AUTORIZADA**, com `data_venda 12:16:35` e `dhEmi 2026-09-01T15:16:50`. O mesmo
+cenário devolvia `704` ontem.
+
+⚠️ **A contingência não foi afetada:** o dreno reenvia o `xml_assinado` como está, não remonta — e
+ali o `dhEmi` antigo é legítimo (`tpEmis=9` explica à SEFAZ por que chegou depois).
+
+Teste: `vendaAntigaEmiteComADataDeHojeNaoComADaVenda`, que envelhece a venda em 3 h e exige que o
+**XML gravado** declare hoje. Provado por **sabotagem**: devolvendo `venda.dataVenda()`, reprova.
+
+⏭️ **O que ficou declarado e não medido:** a tolerância da **NF-e 55** é outra (a regra de 5 minutos
+é da NFC-e) — a correção serve aos dois porque `now()` é sempre válido, mas não medi o limite do
+modelo 55.
 
 ### 77. 🔵 NFS-e ainda não tem linha de configuração
 `fiscal_config_nfse` está vazia para a empresa 1. O default do sistema é **HOMOLOGACAO** (produção
@@ -884,6 +934,30 @@ trancasse todo mundo.
 teto **por conta** — o balde por IP é em memória e por instância (P6), então reinício da API zera e
 várias origens dividem o mesmo alvo sem estourar o balde de nenhuma.
 
+### 80. 🔵 Backoffice sem restrição por IP — **esperando a Vetor ter IP fixo** (2026-09-01)
+Hoje `admin.nainer.com.br` está **aberto à internet**, com o login de staff como tranca única. O
+allowlist é a segunda tranca e **já está escrito e comentado** em `infra/nginx/`, em **dois** blocos
+que precisam ser ligados juntos — o do site do backoffice e o de `/api/admin/`. Ligar só a tela
+deixaria a API aberta, e é ela que devolve nome, e-mail e WhatsApp dos leads.
+
+```nginx
+# allow 200.0.0.0/24;   # exemplo — NÃO é o IP real da Vetor
+# allow 127.0.0.1;
+# deny all;
+```
+
+**Por que está parada:** a Vetor **ainda não tem IP fixo** (dito por ele em 2026-09-01, ao ser
+perguntado qual IP liberar). ⚠️ E ligar com IP dinâmico é pior que não ligar: no dia em que o IP
+mudar, ninguém entra no próprio backoffice — 403 do nginx, **sem tela de login** para explicar o
+que aconteceu. É por isso que o comentário no arquivo diz *"enquanto não houver VPN"*.
+
+⚠️ Enquanto isso, o buraco declarado no item 40 continua de pé: quem souber o e-mail de um staff
+mantém a conta trancada repetindo 5 erros a cada 15 min. O remédio dele **não é código**, é este
+item.
+
+**Destrava com:** um IP fixo (ou faixa) da Vetor, ou uma VPN. Aí é descomentar os dois blocos e
+recarregar o nginx.
+
 ### 41. ✅ FECHADO — Módulo fiscal não checava "empresas com acesso"
 24 endpoints recebem `idEmpresa` por path/query sem conferir `usuario_empresa` — as rotas de
 dinheiro usam o claim `eid` corretamente, o bloco fiscal não. Operador da filial 1 põe a **filial
@@ -1505,9 +1579,43 @@ não somar mais um item.
 </details>
 ---
 
-## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-09-01)
+## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-09-01, fim do dia)
 
 > ⚠️ **Apresentar assim, agrupado — nunca as ~29 linhas cruas.** Ele já disse *"TA MUITO CONFUSO"*.
+
+### 🟢 Nada trava a operação
+A NFC-e **emite** (#75 fechado por ele) e a numeração de produção nasce limpa (#76 fechado por
+medição). O fiscal está de pé: 7 notas hoje, 7 autorizadas.
+
+### ✅ Fechados neste último bloco
+**75** (CSC redigitado por ele) · **76** (não há numeração de produção queimada) · **81** (`dhEmi`
+com a hora da venda → `cStat 704`) · o **"Failed to read request"** da tela de NFS-e · o cupom da
+NFC-e que não lia o `infCpl` · o ✕ fora do canto em 3 popups · o "Conferindo…" no reenvio do 2FA ·
+a tarja do DANFE (decisão dele) · **#68** encolheu: Devolução, Orçamento e 2FA abertos na tela.
+
+### 🔵 Decisão de produto (bola dele)
+- **49** — credenciais da NFS-e: o **certificado A1 está lá** e o teste de conexão passa; o que
+  falta é a linha de configuração e os dados do Simples (**RBT12, anexo, alíquota efetiva**), que
+  só ele tem. **77** — configurar (Menu › Fiscal › Configuração da NFS-e).
+- **80** — backoffice por IP: **esperando a Vetor ter IP fixo** (registrado hoje).
+- **12** (13 popups sem ✕) · **11 / 28** (cobrança e planos pagos) · **14 / 69** (devolução não
+  estorna comissão, taxa nem acréscimo) · **17** (estorno não revoga assinatura) · **47** (lead
+  grava consentimento não dado) · **22** (SVC) · **23** (CSOSN 500) · **66** (ano na inutilização) ·
+  **13** (Painel listado como futura).
+
+### 🟢 O que sobrou da minha bola
+- **Expurgo de `plataforma.codigo_login`** — não existe nenhum: a tabela cresce para sempre e
+  guarda hash e IP de contas já excluídas (achado ao excluir o usuário de teste).
+- **54** (agenda da OS, depende dele) · **29** (depende do #28).
+- Concorrência: faltam cota de vendas, reserva de OS, vale-mercadoria, numeração fiscal, crediário
+  e o `SKIP LOCKED` do webhook.
+- **68** — o balanço do que continua sem cobertura.
+
+### ⚠️ Declarado e não medido
+A **tolerância da NF-e 55** (a regra dos 5 min é da NFC-e) · um **`simples_anexo` que gravou NULL
+duas vezes** e não reproduziu nas medições controladas.
+
+<details><summary>Resumo anterior (2026-09-01, manhã)</summary>
 
 ### 🔴 Trava a operação AGORA (bola dele) — **inalterado, e é o mais importante**
 - **75 — A NFC-e não emite.** O CSC de homologação gravado não é o credenciado; redigitar em
@@ -1540,7 +1648,9 @@ TS↔Java por endpoint, guarda da ajuda de tela, e a tarefa dos DANFEs.
 - **22 (SVC)** · **23 (CSOSN 500)** · **66 (ano na inutilização)** · **13** (o Painel listado como
   futura) · **40** — restringir o backoffice por IP (o allowlist já está escrito no nginx).
 
-<details><summary>Resumo anterior (2026-08-31)</summary>
+</details>
+
+<details><summary>Resumo de 2026-08-31</summary>
 
 ### 🔴 Trava a operação AGORA (bola dele)
 - **75 — A NFC-e não emite.** O CSC de homologação gravado não é o credenciado; redigitar em Fiscal
