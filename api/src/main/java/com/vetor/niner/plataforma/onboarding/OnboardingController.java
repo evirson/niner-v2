@@ -1,6 +1,13 @@
 package com.vetor.niner.plataforma.onboarding;
 
+import com.vetor.niner.comum.web.IpDoCliente;
+import com.vetor.niner.plataforma.acesso.AcessoLogService;
+import com.vetor.niner.plataforma.acesso.LoginRecusadoException;
+import com.vetor.niner.plataforma.acesso.ResultadoAcesso;
 import com.vetor.niner.plataforma.aquisicao.AquisicaoService;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.*;
 import com.vetor.niner.plataforma.onboarding.RecuperacaoSenhaDtos.RedefinirSenhaRequest;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.CodigoLoginRequest;
@@ -18,15 +25,32 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/publico")
 public class OnboardingController {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(OnboardingController.class);
+
     private final SignupService signup;
     private final AquisicaoService aquisicao;
     private final RecuperacaoSenhaService recuperacao;
+    private final AcessoLogService acessos;
+    private final IpDoCliente ipDoCliente;
+    private final JwtDecoder jwtDecoder;
 
+    /**
+     * ⚠️ {@code @Qualifier("jwtDecoder")} é obrigatório: existem <b>dois</b> beans
+     * {@code JwtDecoder} (tenant e staff), e sem o qualificador o Spring resolve por nome de
+     * parâmetro ou pelo {@code @Primary} — que foi exatamente como um token de lojista quase
+     * abriu o backoffice em 2026-08-19. Aqui o decoder certo é o de <b>tenant</b>: o token que
+     * acabamos de emitir é dele.
+     */
     public OnboardingController(SignupService signup, AquisicaoService aquisicao,
-            RecuperacaoSenhaService recuperacao) {
+            RecuperacaoSenhaService recuperacao, AcessoLogService acessos, IpDoCliente ipDoCliente,
+            @Qualifier("jwtDecoder") JwtDecoder jwtDecoder) {
         this.signup = signup;
         this.aquisicao = aquisicao;
         this.recuperacao = recuperacao;
+        this.acessos = acessos;
+        this.ipDoCliente = ipDoCliente;
+        this.jwtDecoder = jwtDecoder;
     }
 
     /**
@@ -50,10 +74,32 @@ public class OnboardingController {
         return resposta;
     }
 
-    /** Login de usuário do tenant (slug da loja + email + senha). */
+    /**
+     * Login de usuário do tenant (slug da loja + email + senha).
+     *
+     * <p>⛔ <b>O log de acesso é gravado AQUI, fora da transação do login</b>
+     * (docs/MODULOLOGACESSO.md §4) — {@code SignupService.login} é {@code @Transactional}, e
+     * gravar lá dentro é o defeito que fez o signup responder <b>201 com a conta inexistente</b>
+     * em 2026-08-18: no Postgres um comando que falha aborta a transação inteira, e o
+     * {@code try/catch} em Java não desfaz isso.
+     *
+     * <p>⚠️ <b>Só o login CONCLUÍDO é sucesso.</b> As voltas intermediárias (escolher conta,
+     * escolher empresa, pedir o código de 2FA) devolvem {@code token == null} e não registram
+     * nada — marcá-las como sucesso encheria a auditoria de linhas que não são entrada no sistema.
+     */
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest req, jakarta.servlet.http.HttpServletRequest http) {
-        return signup.login(req, http.getRemoteAddr());
+        var origem = origemDe(http);
+        try {
+            TokenResponse resposta = signup.login(req, ipDoCliente.de(http));
+            if (resposta.token() != null) {
+                registrarSucesso(resposta.token(), req.email(), origem);
+            }
+            return resposta;
+        } catch (LoginRecusadoException e) {
+            acessos.registrar(e.resultado(), null, null, null, req.email(), origem);
+            throw e;
+        }
     }
 
     /**
@@ -62,8 +108,63 @@ public class OnboardingController {
      * <p>⚠️ Só o {@code desafio} (UUID opaco) e o código — a senha não trafega de novo.
      */
     @PostMapping("/login/codigo")
-    public TokenResponse loginComCodigo(@Valid @RequestBody CodigoLoginRequest req) {
-        return signup.concluirLoginComCodigo(req);
+    public TokenResponse loginComCodigo(@Valid @RequestBody CodigoLoginRequest req,
+            jakarta.servlet.http.HttpServletRequest http) {
+        var origem = origemDe(http);
+        try {
+            TokenResponse resposta = signup.concluirLoginComCodigo(req);
+            // ⚠️ Aqui o e-mail não vem do corpo (a segunda etapa só carrega o desafio opaco e o
+            // código, de propósito) — vem do token recém-emitido, que é a fonte da verdade.
+            registrarSucesso(resposta.token(), null, origem);
+            return resposta;
+        } catch (LoginRecusadoException e) {
+            // Horário de acesso conferido de novo na segunda etapa.
+            acessos.registrar(e.resultado(), null, null, null, null, origem);
+            throw e;
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            // ⚠️ Tudo o que sobra neste endpoint é código errado, expirado ou já usado — o
+            // `CodigoLoginService` lança a exceção genérica, e classificar pela mensagem seria
+            // frágil. Aqui o ENDPOINT já diz qual é o assunto: quem chega neste ponto estava na
+            // segunda etapa do login.
+            acessos.registrar(ResultadoAcesso.CODIGO_2FA_INVALIDO, null, null, null, null, origem);
+            throw e;
+        }
+    }
+
+    private AcessoLogService.Origem origemDe(jakarta.servlet.http.HttpServletRequest http) {
+        return new AcessoLogService.Origem(ipDoCliente.de(http), ipDoCliente.confiavel(),
+                http.getHeader("User-Agent"));
+    }
+
+    /**
+     * Lê do próprio token quem entrou.
+     *
+     * <p>⭐ Os ids vêm do <b>token recém-emitido</b>, não do corpo do pedido nem de um campo novo
+     * no {@code TokenResponse}: é a fonte da verdade sobre quem de fato entrou, e evita acoplar o
+     * DTO público ao log. {@code sub} = usuário, {@code tid} = conta, {@code eid} = empresa.
+     *
+     * <p>⚠️ Se a leitura falhar por qualquer motivo, o acesso ainda é registrado — sem os ids, mas
+     * com e-mail, IP e aparelho. Perder a linha inteira por causa de um campo seria pior.
+     */
+    private void registrarSucesso(String token, String emailInformado, AcessoLogService.Origem origem) {
+        Long idTenant = null;
+        Long idUsuario = null;
+        Long idEmpresa = null;
+        String email = emailInformado;
+        try {
+            Jwt jwt = jwtDecoder.decode(token);
+            idUsuario = Long.valueOf(jwt.getSubject());
+            Object tid = jwt.getClaim("tid");
+            Object eid = jwt.getClaim("eid");
+            idTenant = tid == null ? null : ((Number) tid).longValue();
+            idEmpresa = eid == null ? null : ((Number) eid).longValue();
+            if (email == null) {
+                email = jwt.getClaimAsString("email");
+            }
+        } catch (RuntimeException e) {
+            log.warn("Acesso registrado sem os identificadores: o token não pôde ser lido.", e);
+        }
+        acessos.registrar(ResultadoAcesso.SUCESSO, idTenant, idUsuario, idEmpresa, email, origem);
     }
 
     /**

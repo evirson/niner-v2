@@ -4,6 +4,8 @@ import com.vetor.niner.comum.config.NinerProperties;
 import com.vetor.niner.comum.ramo.RamoAtividadeService;
 import com.vetor.niner.comum.seguranca.TokenService;
 import com.vetor.niner.identidade.usuario.HorarioAcessoService;
+import com.vetor.niner.plataforma.acesso.LoginRecusadoException;
+import com.vetor.niner.plataforma.acesso.ResultadoAcesso;
 import com.vetor.niner.plataforma.diretorio.DiretorioLogin;
 import com.vetor.niner.plataforma.diretorio.DiretorioLogin.ContaCandidata;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.*;
@@ -356,7 +358,10 @@ public class SignupService {
         if (autenticadas.isEmpty()) {
             // Mensagem única para e-mail inexistente, senha errada, conta inativa e escolha
             // inválida: qualquer distinção aqui vira oráculo para quem está tentando adivinhar.
-            throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
+            // ⚠️ O log de acesso recebe o MESMO CREDENCIAL_INVALIDA nos quatro casos, pelo mesmo
+            // motivo: ele não pode ser mais específico que a autenticação (2026-09-01).
+            throw new LoginRecusadoException(UNAUTHORIZED, "Credenciais inválidas.",
+                    ResultadoAcesso.CREDENCIAL_INVALIDA);
         }
         if (autenticadas.size() > 1) {
             List<ContaOpcaoLogin> contas = autenticadas.stream()
@@ -386,7 +391,8 @@ public class SignupService {
         // aí o fallback do cadastro é a única referência que existe — é o mesmo desenho de
         // `ContaDoUsuario`.
         if (!horarioAcesso.podeAcessarAgora(usuario.idUsuario(), 0, req.idEmpresa())) {
-            throw new ResponseStatusException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA);
+            throw new LoginRecusadoException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA,
+                    ResultadoAcesso.FORA_DO_HORARIO);
         }
 
         List<EmpresaOpcaoLogin> empresas = jdbc.sql("""
@@ -401,7 +407,8 @@ public class SignupService {
                 .list();
 
         if (empresas.isEmpty()) {
-            throw new ResponseStatusException(UNAUTHORIZED, "Usuário sem empresa vinculada. Contate o administrador.");
+            throw new LoginRecusadoException(UNAUTHORIZED,
+                    "Usuário sem empresa vinculada. Contate o administrador.", ResultadoAcesso.SEM_EMPRESA);
         }
 
         // idEmpresa informado (segunda volta ou já sabido pelo front) é sempre validado contra
@@ -411,7 +418,8 @@ public class SignupService {
         if (req.idEmpresa() != null) {
             boolean permitida = empresas.stream().anyMatch(e -> e.idEmpresa() == req.idEmpresa());
             if (!permitida) {
-                throw new ResponseStatusException(UNAUTHORIZED, "Empresa inválida para este usuário.");
+                throw new LoginRecusadoException(UNAUTHORIZED, "Empresa inválida para este usuário.",
+                        ResultadoAcesso.EMPRESA_INVALIDA);
             }
             idEmpresa = req.idEmpresa();
         } else if (empresas.size() == 1) {
@@ -490,7 +498,8 @@ public class SignupService {
         // ⚠️ Via `contas`, nunca direto: este caminho é público e não tem TenantContext — o
         // serviço de horário consultado sem tenant devolve vazio e responde "pode acessar".
         if (!contas.podeAcessarAgora(d.idTenant(), d.idUsuario())) {
-            throw new ResponseStatusException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA);
+            throw new LoginRecusadoException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA,
+                    ResultadoAcesso.FORA_DO_HORARIO);
         }
         return emitirToken(d.idUsuario(), d.idTenant(), d.idEmpresa(), dados.email(),
                 dados.administrador(), dados.slug());
