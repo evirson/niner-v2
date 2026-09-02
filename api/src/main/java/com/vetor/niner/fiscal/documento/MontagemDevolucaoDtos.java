@@ -98,6 +98,19 @@ public final class MontagemDevolucaoDtos {
             BigDecimal quantidade,
             BigDecimal valorUnitario,
             BigDecimal valorProduto,
+            /**
+             * {@code vDesc} do item, <b>espelhado</b> da nota original e rateado pela quantidade
+             * devolvida (2026-09-02, pendência 60).
+             *
+             * <p>⛔ <b>Sem ele a nota de entrada declarava o valor BRUTO:</b> devolver uma venda de
+             * R$ 100 com R$ 10 de desconto emitia devolução de R$ 100 referenciando uma NFC-e cujo
+             * {@code vNF} é R$ 90 — a nota afirmando um valor que a operação nunca teve, e todo o
+             * resto do sistema (vale, DRE, Lucratividade, Comissões) já no líquido desde 29/08.
+             *
+             * <p>{@code null} ou zero não gera a tag: o XSD a declara opcional, e escrever
+             * {@code 0.00} em toda nota só polui o XML.
+             */
+            BigDecimal valorDesconto,
             String unidadeTributavel,
             BigDecimal quantidadeTributavel,
             BigDecimal valorUnitarioTributavel,

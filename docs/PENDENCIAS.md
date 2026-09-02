@@ -1424,7 +1424,44 @@ privado usado não compila.
 
 ---
 
-### 60. ⛔ A NF-e 55 de devolução declara o valor BRUTO 🟢
+### 60. ✅ A NF-e 55 de devolução saiu do bruto — **FECHADO em 2026-09-02**
+
+**O que era:** `DevolucaoFiscalAssembler` não lia `documento_fiscal_item.valor_desconto` e
+`somar()` fixava `vDesc = ZERO`, com `vNF` = soma dos `vProd`. Devolução total de uma venda de
+R$ 30,00 com R$ 5,00 de desconto emitia nota de entrada de **R$ 30,00** referenciando, no mesmo
+XML, uma NFC-e cujo `vNF` é **R$ 25,00**.
+
+**O que ficou:** o desconto é espelhado no item (rateado pela quantidade devolvida, pela mesma
+máquina de rateio dos outros valores), somado no total, e `vNF = vProd − vDesc`. O `vProd`
+continua bruto — é ele que o item vendeu.
+
+⭐ **A ponta vizinha tinha o mesmo defeito e foi corrigida junto:** a **devolução ao fornecedor**
+(`DevolucaoCompraFiscalAssembler`) também ignorava `entrada_nfe_item.valor_desconto` — que é
+gravado de verdade, vem do `vDesc` do XML do fornecedor. Lá `vNF = produtos − desconto + ST`.
+Corrigir uma ponta e não varrer as outras é o defeito mais comum deste projeto.
+
+**Como foi provado, já que a suíte roda com o fiscal desligado:**
+
+| Prova | O que ela dá |
+|---|---|
+| `MontadorXmlNfeDevolucaoTest.itemComDescontoLevaVDescEOTotalSaiLiquido` | valida contra o **XSD oficial** — a posição do `vDesc` dentro de `prod` é fixada pelo schema (entre `vUnTrib` e `indTot`), e errar a ordem é rejeição garantida |
+| `…itemSemDescontoNaoEscreveATagNoProduto` | o par negativo: um montador que emitisse a tag sempre passaria no teste acima |
+| `DevolucaoFiscalEmissaoTest.devolucaoDeVendaComDescontoDeclaraOValorLiquido` | ponta a ponta a partir da **venda real** (o PDV rateia o desconto), afirmando sobre o **XML assinado** e sobre a coluna `valor_total` |
+
+⚠️ **Sabotado para valer:** com `vDesc = ZERO` de volta, o teste falha mostrando
+`<vDesc>0.00</vDesc>` e `<vNF>30.00</vNF>` no XML — o defeito exato que o item descrevia.
+
+⛔ **O que fica declarado, e não foi feito:**
+- **nada foi transmitido à SEFAZ.** O XSD é conferido, a regra de negócio do `vDesc` não — só um
+  `cStat` em homologação fecha isso;
+- **a devolução ao fornecedor não tem caso ponta a ponta com desconto.** O montador é o mesmo (e
+  está coberto pelo XSD), mas nenhum teste monta uma NF-e de saída a partir de uma entrada com
+  `vDesc` do fornecedor.
+
+⚠️ E o comentário de `DevolucaoProdutoService` que **afirmava** o bruto — o mesmo que gerou este
+item — foi corrigido junto: invariante afirmado em comentário apodrece.
+
+
 
 **Onde:** `api/.../fiscal/documento/DevolucaoFiscalAssembler.java` — `buscarItensDaNotaOriginal`
 não lê `documento_fiscal_item.valor_desconto` (a coluna existe e é gravada, V035:409) e `somar()`

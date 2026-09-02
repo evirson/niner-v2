@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-02 — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-02 (2) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,64 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-02 (2) — A NF-e DE DEVOLUÇÃO SAIU DO BRUTO, nas duas pontas
+>
+> **Medido:** **1205 testes verdes, 0 falhas** (eram 1202) · migrations até **V109**.
+>
+> ### O defeito, e por que ele sobreviveu a 29/08
+>
+> Em 29/08 todo o sistema passou a trabalhar no **líquido** — vale-mercadoria, DRE, Lucratividade,
+> Comissões, cancelamento. A **nota fiscal** ficou sendo o único lugar no bruto:
+> `DevolucaoFiscalAssembler` não lia `documento_fiscal_item.valor_desconto` e `somar()` fixava
+> `vDesc = ZERO`, com `vNF` = soma dos `vProd`.
+>
+> Resultado medido no XML: devolver uma venda de R$ 30,00 com R$ 5,00 de desconto emitia nota de
+> entrada de **R$ 30,00** referenciando, **no mesmo documento**, uma NFC-e cujo `vNF` é
+> **R$ 25,00**. Dois valores para o mesmo fato, um deles perante a SEFAZ.
+>
+> ### ⭐ A ponta vizinha tinha o mesmo defeito
+>
+> A **devolução ao fornecedor** (`DevolucaoCompraFiscalAssembler`) também ignorava o desconto — e
+> ele existe de verdade ali: `entrada_nfe_item.valor_desconto` é preenchido a partir do `vDesc` do
+> XML do fornecedor, conferido no INSERT de `EntradaMercadoriaService`. Lá o total é
+> `produtos − desconto + ST`. Corrigir uma ponta e não varrer as outras é o defeito mais comum
+> deste projeto; desta vez a varredura veio antes do commit.
+>
+> ### Como isso foi provado sem transmitir
+>
+> O item estava parado havia dias com um motivo bom: *"montagem de XML fiscal só se valida
+> transmitindo, e a suíte roda com `emite_nfe = false`"*. ⭐ **A saída foi lembrar que o projeto já
+> valida contra o XSD oficial** — `MontadorXmlNfeDevolucaoTest` roda o `ValidadorXsd`, o mesmo que
+> a emissão usa no F11 antes de transmitir. Isso cobre a parte que mais rejeita na prática: a
+> **posição** do `vDesc` dentro de `prod` é fixada pelo schema (entre `vUnTrib` e `indTot`).
+>
+> Três testes novos: o caso com desconto (XSD), o **par negativo** (sem desconto, nenhuma tag — um
+> montador que emitisse `0.00` sempre passaria só com o primeiro) e o ponta a ponta a partir da
+> **venda real**, afirmando sobre o **XML assinado**.
+>
+> ⚠️ **Sabotagem, como sempre:** com `vDesc = ZERO` de volta, o teste falha mostrando
+> `<vDesc>0.00</vDesc>` e `<vNF>30.00</vNF>`.
+>
+> ### ⚠️ Duas armadilhas do próprio ferramental, no mesmo dia
+>
+> 1. **`mvn test-compile` incremental MENTIU.** Acrescentei um campo **no meio** de um record de 45
+>    componentes e o `test-compile` passou — o que é impossível. `clean test-compile` acusou o
+>    construtor de 45 argumentos que não casava mais. Se eu tivesse confiado, o commit sairia
+>    quebrado.
+> 2. **Crase dentro de script no bash come o trecho.** O script de edição da documentação foi
+>    interpretado pelo shell (`SELECT: command not found`) porque tinha crases — lição já
+>    catalogada, repetida. Heredoc citado (`<<'EOF'`) resolve.
+>
+> ### ⛔ O que fica declarado
+>
+> - **Nada foi transmitido à SEFAZ.** O XSD é conferido; a regra de negócio do `vDesc` não.
+> - **A devolução ao fornecedor não tem caso ponta a ponta com desconto** — o montador é o mesmo e
+>   está coberto, mas nenhum teste monta a NF-e de saída a partir de uma entrada com `vDesc`.
+> - E o comentário de `DevolucaoProdutoService` que **afirmava** o bruto (o mesmo que gerou o item)
+>   foi corrigido junto.
+
+---
 
 > ## 📌 2026-09-02 — ABRIR AS TELAS: a de Acessos nunca tinha funcionado, e 7 testes verdes não viam
 >

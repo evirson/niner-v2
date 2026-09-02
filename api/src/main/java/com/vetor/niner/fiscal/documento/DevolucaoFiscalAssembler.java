@@ -152,6 +152,7 @@ public class DevolucaoFiscalAssembler {
                 nItem, o.numeroItem(), o.codigoProduto(), o.codigoEan(), o.descricao(), o.codigoNcm(), o.cest(),
                 cfopDevolucao(o), o.unidadeComercial(), d.qtd(), o.valorUnitario(),
                 ratear(o.valorProduto(), proporcao, total),
+                ratear(o.valorDesconto(), proporcao, total),
                 o.unidadeTributavel(), d.qtd(), o.valorUnitarioTrib(), o.origemMercadoria(),
                 o.cstIcms(), o.csosn(),
                 ratear(o.baseCalculoIcms(), proporcao, total), o.percReducaoBc(), o.aliquotaIcms(),
@@ -240,9 +241,18 @@ public class DevolucaoFiscalAssembler {
         return s.toString();
     }
 
+    /**
+     * ⛔ <b>O desconto entra aqui, e é o que faz a nota declarar o valor que a venda teve</b>
+     * (2026-09-02, pendência 60). Até esta data {@code vDesc} era fixo em ZERO e {@code vNF} era a
+     * soma dos {@code vProd}: devolver uma venda de R$ 100 com R$ 10 de desconto emitia nota de
+     * entrada de <b>R$ 100</b> referenciando uma NFC-e cujo {@code vNF} é <b>R$ 90</b>.
+     *
+     * <p>⚠️ {@code vNF = vProd − vDesc}: os dois lados têm de mudar juntos. Somar o desconto e não
+     * descontá-lo do total deixaria o XML internamente inconsistente — a SEFAZ confere essa conta.
+     */
     private static TotaisDevolucao somar(List<ItemDevolucao> itens) {
         BigDecimal bcIcms = BigDecimal.ZERO, icms = BigDecimal.ZERO, bcSt = BigDecimal.ZERO, st = BigDecimal.ZERO;
-        BigDecimal prod = BigDecimal.ZERO, pis = BigDecimal.ZERO, cofins = BigDecimal.ZERO;
+        BigDecimal prod = BigDecimal.ZERO, desc = BigDecimal.ZERO, pis = BigDecimal.ZERO, cofins = BigDecimal.ZERO;
         BigDecimal baseIbs = BigDecimal.ZERO, ibsUf = BigDecimal.ZERO, ibsMun = BigDecimal.ZERO;
         BigDecimal cbs = BigDecimal.ZERO, trib = BigDecimal.ZERO;
         for (ItemDevolucao i : itens) {
@@ -251,6 +261,7 @@ public class DevolucaoFiscalAssembler {
             bcSt = bcSt.add(XmlFiscal.nz(i.baseCalculoSt()));
             st = st.add(XmlFiscal.nz(i.valorIcmsSt()));
             prod = prod.add(XmlFiscal.nz(i.valorProduto()));
+            desc = desc.add(XmlFiscal.nz(i.valorDesconto()));
             pis = pis.add(XmlFiscal.nz(i.valorPis()));
             cofins = cofins.add(XmlFiscal.nz(i.valorCofins()));
             baseIbs = baseIbs.add(XmlFiscal.nz(i.baseIbsCbs()));
@@ -259,8 +270,8 @@ public class DevolucaoFiscalAssembler {
             cbs = cbs.add(XmlFiscal.nz(i.valorCbs()));
             trib = trib.add(XmlFiscal.nz(i.valorTotalTributos()));
         }
-        // vNF = soma dos produtos: IBS/CBS não compõem o total (DF32, resolvida pelo XSD no B5).
-        return new TotaisDevolucao(bcIcms, icms, bcSt, st, prod, BigDecimal.ZERO, pis, cofins, prod,
+        // vNF = produtos − desconto: IBS/CBS não compõem o total (DF32, resolvida pelo XSD no B5).
+        return new TotaisDevolucao(bcIcms, icms, bcSt, st, prod, desc, pis, cofins, prod.subtract(desc),
                 baseIbs, ibsUf, ibsMun, cbs, trib);
     }
 
@@ -338,7 +349,7 @@ public class DevolucaoFiscalAssembler {
         Map<Long, ItemOriginal> mapa = new LinkedHashMap<>();
         jdbc.sql("""
                         SELECT numero_item, id_variacao, codigo_produto, codigo_ean, descricao, codigo_ncm, cest,
-                               unidade_comercial, quantidade, valor_unitario, valor_produto,
+                               unidade_comercial, quantidade, valor_unitario, valor_produto, valor_desconto,
                                unidade_tributavel, valor_unitario_trib, origem_mercadoria,
                                cst_icms, csosn, base_calculo_icms, perc_reducao_bc, aliquota_icms, valor_icms,
                                base_calculo_st, valor_icms_st, base_st_retido, icms_st_retido,
@@ -357,6 +368,7 @@ public class DevolucaoFiscalAssembler {
                         rs.getString("codigo_ean"), rs.getString("descricao"), rs.getString("codigo_ncm"),
                         rs.getString("cest"), rs.getString("unidade_comercial"), rs.getBigDecimal("quantidade"),
                         rs.getBigDecimal("valor_unitario"), rs.getBigDecimal("valor_produto"),
+                        rs.getBigDecimal("valor_desconto"),
                         rs.getString("unidade_tributavel"), rs.getBigDecimal("valor_unitario_trib"),
                         rs.getInt("origem_mercadoria"),
                         rs.getString("cst_icms"), rs.getString("csosn"), rs.getBigDecimal("base_calculo_icms"),
@@ -466,6 +478,7 @@ public class DevolucaoFiscalAssembler {
     private record ItemOriginal(int numeroItem, long idVariacao, String codigoProduto, String codigoEan,
                                  String descricao, String codigoNcm, String cest, String unidadeComercial,
                                  BigDecimal quantidade, BigDecimal valorUnitario, BigDecimal valorProduto,
+                                 BigDecimal valorDesconto,
                                  String unidadeTributavel, BigDecimal valorUnitarioTrib, int origemMercadoria,
                                  String cstIcms, String csosn, BigDecimal baseCalculoIcms, BigDecimal percReducaoBc,
                                  BigDecimal aliquotaIcms, BigDecimal valorIcms, BigDecimal baseCalculoSt,

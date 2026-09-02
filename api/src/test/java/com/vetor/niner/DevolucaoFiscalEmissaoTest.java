@@ -133,6 +133,106 @@ class DevolucaoFiscalEmissaoTest {
     }
 
     /**
+     * ⛔ <b>Venda COM DESCONTO: a nota de devolução declara o valor que a venda teve</b>
+     * (pendência 60, 2026-09-02).
+     *
+     * <p>Até esta data o assembler não lia {@code documento_fiscal_item.valor_desconto} e
+     * {@code somar()} fixava {@code vDesc = ZERO}, com {@code vNF} = soma dos {@code vProd}:
+     * devolver uma venda de R$ 30,00 com R$ 5,00 de desconto emitia uma nota de entrada de
+     * <b>R$ 30,00</b> referenciando, no mesmo XML, uma NFC-e cujo {@code vNF} é <b>R$ 25,00</b>.
+     * Dois valores para o mesmo fato, um deles perante a SEFAZ.
+     *
+     * <p>⭐ <b>Este é o teste que faltava para fechar o item</b>: ele parte da venda real (o PDV
+     * rateia o desconto entre os itens e grava em {@code documento_fiscal_item}) e afirma sobre o
+     * <b>XML assinado</b> da devolução — não sobre o objeto intermediário. O montador em si é
+     * coberto contra o XSD oficial em {@code MontadorXmlNfeDevolucaoTest}.
+     *
+     * <p>⚠️ {@code cfg_geral.percentual_desconto_venda} nasce <b>0</b> no signup, então o PDV
+     * recusaria qualquer desconto — o teto é liberado antes da venda, e é isso que torna o cenário
+     * possível.
+     */
+    @Test
+    void devolucaoDeVendaComDescontoDeclaraOValorLiquido() throws Exception {
+        String token = assinarNovoTenant("devol-desconto");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, "11222333000181");
+        enviarCertificado(token, idEmpresa, "11222333000181");
+        ligarFiscal(token, idEmpresa, true);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO COM DESCONTO", idPerfil, "30.00");
+        long idCliente = criarClienteAnonimo(token, "Cliente Desconto");
+        long idFuncionario = criarFuncionario(token, "Vendedor Desconto");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        jdbc.sql("UPDATE cfg_geral SET percentual_desconto_venda = 100 WHERE id_tenant = ?")
+                .param(idTenant).update();
+
+        String respVenda = mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":5.00,"idCliente":%d,
+                                 "idFuncionario":%d,
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":25.00,"numeroParcelas":1}]}
+                                """.formatted(idVariacao, idCliente, idFuncionario, idCarteira)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idVenda = ((Number) JsonPath.read(respVenda, "$.idVenda")).longValue();
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk());
+
+        // ⚠️ A premissa do teste, conferida no banco: o desconto de fato chegou ao item fiscal da
+        // NFC-e. Sem esta asserção, um dia em que o PDV deixasse de gravar `valor_desconto` o teste
+        // continuaria verde (vDesc 0 espelhando vDesc 0) e não diria mais nada.
+        BigDecimal descontoNaNfce = jdbc.sql("""
+                        SELECT i.valor_desconto FROM documento_fiscal_item i
+                          JOIN documento_fiscal d ON d.id_tenant = i.id_tenant
+                           AND d.id_documento_fiscal = i.id_documento_fiscal
+                         WHERE i.id_tenant = ? AND d.id_venda = ? AND d.modelo = 65
+                        """)
+                .params(idTenant, idVenda).query(BigDecimal.class).single();
+        assertThat(descontoNaNfce).as("o PDV rateia o desconto da venda no item fiscal")
+                .isEqualByComparingTo("5.00");
+
+        String respDevolucao = mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                                """.formatted(idVenda, idVariacao)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idDocDevolucao = ((Number) JsonPath.read(respDevolucao, "$.notaFiscal.idDocumentoFiscal")).longValue();
+
+        String xml = jdbc.sql("""
+                        SELECT xml_assinado FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_documento_fiscal = ?
+                        """)
+                .params(idTenant, idDocDevolucao).query(String.class).single();
+
+        assertThat(xml)
+                .as("o desconto espelhado vai no item da nota de entrada")
+                .contains("<vDesc>5.00</vDesc>")
+                .as("vProd continua o bruto — é ele que o item vendeu")
+                .contains("<vProd>30.00</vProd>")
+                .as("e o total sai LÍQUIDO: R$ 30,00 - R$ 5,00 = R$ 25,00, o mesmo vNF da NFC-e original")
+                .contains("<vNF>25.00</vNF>");
+
+        // A coluna acompanha o XML: quem lê o banco vê o mesmo número que a SEFAZ recebeu.
+        BigDecimal totalGravado = jdbc.sql("""
+                        SELECT valor_total FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_documento_fiscal = ?
+                        """)
+                .params(idTenant, idDocDevolucao).query(BigDecimal.class).single();
+        assertThat(totalGravado).isEqualByComparingTo("25.00");
+    }
+
+    /**
      * F3 — a nota nunca bloqueia a operação de balcão. A mercadoria já voltou fisicamente ao
      * estoque e o vale-mercadoria já é do cliente: uma rejeição da SEFAZ registra a nota com a
      * situação real e segue, em vez de desfazer a devolução (diferente do Cancelamento de Venda,

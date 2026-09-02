@@ -165,13 +165,13 @@ public class DevolucaoProdutoService {
             // o cliente pagava R$ 90 — e o vale saía R$ 100. **A loja devolvia dinheiro que nunca
             // recebeu**, em toda devolução de venda com desconto, que é o caso comum.
             // ⚠️ A DRE e o vale já acompanham (os cinco leitores do ledger foram alinhados junto).
-            // ⛔ A NF-e 55 de devolução AINDA declara o BRUTO — conferido em 2026-08-29, não é
-            // suposição: `DevolucaoFiscalAssembler.buscarItensDaNotaOriginal` não lê
-            // `documento_fiscal_item.valor_desconto` (a coluna existe e é gravada, V035) e
-            // `somar()` fixa `vDesc = ZERO`, com `vNF = soma dos vProd`. Devolução total de uma
-            // venda com desconto emite nota de entrada de R$ 100 referenciando uma NFC-e de R$ 90.
-            // Não foi corrigido aqui de propósito: mexer em montagem de XML fiscal só se valida
-            // TRANSMITINDO, e a suíte roda com `emite_nfe = false`. Está em docs/PENDENCIAS.md.
+            // ✅ A NF-e 55 de devolução TAMBÉM saiu do bruto (2026-09-02, pendência 60 fechada).
+            // Este comentário afirmava o contrário até essa data, e a afirmação era verdadeira:
+            // `DevolucaoFiscalAssembler` não lia `documento_fiscal_item.valor_desconto` e `somar()`
+            // fixava `vDesc = ZERO`. Hoje o desconto é espelhado no item (rateado pela quantidade
+            // devolvida) e `vNF = vProd − vDesc` — o mesmo total da NFC-e que a nota referencia.
+            // ⚠️ Invariante afirmado em comentário apodrece: se este caminho mudar de novo, é aqui
+            // que a próxima pessoa vai ler a versão errada.
             // ⭐ Derivado do que foi GRAVADO, não recalculado a partir do preço líquido: é
             // exatamente a conta que os cinco leitores fazem em SQL
             // (`qtd * preco_venda - valor_desconto`). Calcular por outro caminho reabriria a

@@ -198,6 +198,11 @@ public class DevolucaoCompraFiscalAssembler {
                     CfopDevolucaoCompra.de(original.cfop()),
                     original.unidadeComercial(), alocada, original.valorUnitario(),
                     ratear(original.valorProduto(), proporcao, total),
+                    // ⛔ O desconto que o FORNECEDOR deu na nota de entrada, rateado pela quantidade
+                    // devolvida (2026-09-02, pendência 60 — o mesmo defeito da devolução de venda,
+                    // na ponta vizinha): sem ele a nota de saída declarava o valor BRUTO de uma
+                    // compra que custou menos.
+                    ratear(original.valorDesconto(), proporcao, total),
                     original.unidadeComercial(), alocada, original.valorUnitario(),
                     original.origemMercadoria(),
                     original.cstIcms(), original.csosn(),
@@ -239,7 +244,7 @@ public class DevolucaoCompraFiscalAssembler {
 
     private TotaisDevolucao somar(List<ItemDevolucao> itens) {
         BigDecimal baseIcms = BigDecimal.ZERO, icms = BigDecimal.ZERO, baseSt = BigDecimal.ZERO;
-        BigDecimal icmsSt = BigDecimal.ZERO, produtos = BigDecimal.ZERO;
+        BigDecimal icmsSt = BigDecimal.ZERO, produtos = BigDecimal.ZERO, desconto = BigDecimal.ZERO;
         BigDecimal pis = BigDecimal.ZERO, cofins = BigDecimal.ZERO;
         for (ItemDevolucao i : itens) {
             baseIcms = baseIcms.add(i.baseCalculoIcms());
@@ -247,13 +252,16 @@ public class DevolucaoCompraFiscalAssembler {
             baseSt = baseSt.add(i.baseCalculoSt());
             icmsSt = icmsSt.add(i.valorIcmsSt());
             produtos = produtos.add(i.valorProduto());
+            desconto = desconto.add(XmlFiscal.nz(i.valorDesconto()));
             pis = pis.add(i.valorPis());
             cofins = cofins.add(i.valorCofins());
         }
-        // vNF = produtos + ST: o imposto retido compõe o total da nota de devolução do mesmo jeito
-        // que compôs o da nota de entrada.
-        return new TotaisDevolucao(baseIcms, icms, baseSt, icmsSt, produtos, BigDecimal.ZERO,
-                pis, cofins, produtos.add(icmsSt),
+        // vNF = produtos − desconto + ST: o imposto retido compõe o total da nota de devolução do
+        // mesmo jeito que compôs o da nota de entrada, e o desconto do fornecedor sai dele pelo
+        // mesmo motivo (2026-09-02, pendência 60). Os dois lados mudam juntos: somar o desconto e
+        // não descontá-lo do total deixaria o XML internamente inconsistente.
+        return new TotaisDevolucao(baseIcms, icms, baseSt, icmsSt, produtos, desconto,
+                pis, cofins, produtos.subtract(desconto).add(icmsSt),
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
@@ -345,7 +353,7 @@ public class DevolucaoCompraFiscalAssembler {
     private List<ItemOriginal> buscarItensDaNotaDeEntrada(long idMovimentoEntrada) {
         return jdbc.sql("""
                         SELECT numero_item, id_variacao, codigo_produto, codigo_ean, descricao, codigo_ncm, cest,
-                               cfop, unidade_comercial, quantidade, valor_unitario, valor_produto,
+                               cfop, unidade_comercial, quantidade, valor_unitario, valor_produto, valor_desconto,
                                origem_mercadoria, cst_icms, csosn, base_calculo_icms, perc_reducao_bc,
                                aliquota_icms, valor_icms, base_calculo_st, valor_icms_st, base_st_retido,
                                icms_st_retido, cst_pis, base_calculo_pis, aliquota_pis, valor_pis,
@@ -361,7 +369,8 @@ public class DevolucaoCompraFiscalAssembler {
                         rs.getString("codigo_ean"), rs.getString("descricao"), rs.getString("codigo_ncm"),
                         rs.getString("cest"), rs.getString("cfop"), rs.getString("unidade_comercial"),
                         rs.getBigDecimal("quantidade"), rs.getBigDecimal("valor_unitario"),
-                        rs.getBigDecimal("valor_produto"), rs.getInt("origem_mercadoria"),
+                        rs.getBigDecimal("valor_produto"), rs.getBigDecimal("valor_desconto"),
+                        rs.getInt("origem_mercadoria"),
                         rs.getString("cst_icms"), rs.getString("csosn"), rs.getBigDecimal("base_calculo_icms"),
                         rs.getBigDecimal("perc_reducao_bc"), rs.getBigDecimal("aliquota_icms"),
                         rs.getBigDecimal("valor_icms"), rs.getBigDecimal("base_calculo_st"),
@@ -386,7 +395,8 @@ public class DevolucaoCompraFiscalAssembler {
     private record ItemOriginal(int numeroItem, long idVariacao, String codigoProduto, String codigoEan,
                                 String descricao, String codigoNcm, String cest, String cfop,
                                 String unidadeComercial, BigDecimal quantidade, BigDecimal valorUnitario,
-                                BigDecimal valorProduto, int origemMercadoria, String cstIcms, String csosn,
+                                BigDecimal valorProduto, BigDecimal valorDesconto,
+                                int origemMercadoria, String cstIcms, String csosn,
                                 BigDecimal baseIcms, BigDecimal percReducaoBc, BigDecimal aliquotaIcms,
                                 BigDecimal valorIcms, BigDecimal baseSt, BigDecimal valorIcmsSt,
                                 BigDecimal baseStRetido, BigDecimal icmsStRetido, String cstPis,

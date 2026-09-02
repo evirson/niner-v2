@@ -251,8 +251,14 @@ public class MontadorXmlNfeDevolucao {
                 .append(tag("cEANTrib", gtin))
                 .append(tag("uTrib", texto(XmlFiscal.ouEntao(item.unidadeTributavel(), item.unidadeComercial()))))
                 .append(tag("qTrib", dec(XmlFiscal.ouEntao(item.quantidadeTributavel(), item.quantidade()), 4)))
-                .append(tag("vUnTrib", dec(XmlFiscal.ouEntao(item.valorUnitarioTributavel(), item.valorUnitario()), 6)))
-                .append(tag("indTot", "1"))
+                .append(tag("vUnTrib", dec(XmlFiscal.ouEntao(item.valorUnitarioTributavel(), item.valorUnitario()), 6)));
+        // ⚠️ `vDesc` entre `vUnTrib` e `indTot` — a ordem é do XSD, não escolha nossa (é a mesma
+        // sequência do MontadorXmlNfce). Só sai quando é positivo: a tag é opcional no schema, e
+        // um `0.00` em toda linha só polui o XML.
+        if (item.valorDesconto() != null && item.valorDesconto().signum() > 0) {
+            xml.append(tag("vDesc", dec(item.valorDesconto(), 2)));
+        }
+        xml.append(tag("indTot", "1"))
                 .append("</prod>");
     }
 

@@ -264,6 +264,66 @@ class MontadorXmlNfeDevolucaoTest {
                 .hasMessageContaining("contador");
     }
 
+    /**
+     * ⛔ <b>Venda com desconto devolve o valor que a venda teve, não o de tabela</b> (pendência 60).
+     *
+     * <p>Até 2026-09-02 o {@code vDesc} era fixo em ZERO e o {@code vNF} era a soma dos
+     * {@code vProd}: devolver uma venda de R$ 199,90 com R$ 19,90 de desconto emitia nota de
+     * entrada de <b>R$ 199,90</b> referenciando uma NFC-e cujo {@code vNF} é <b>R$ 180,00</b> — a
+     * nota afirmando um valor que a operação nunca teve. Todo o resto do sistema (vale, DRE,
+     * Lucratividade, Comissões) já trabalha no líquido desde 29/08; a nota fiscal era o último
+     * lugar no bruto.
+     *
+     * <p>⚠️ <b>As três asserções são inseparáveis</b>: a tag no item, a tag no total e a conta
+     * {@code vNF = vProd − vDesc}. Somar o desconto e não descontá-lo do total deixaria o XML
+     * internamente inconsistente — e é exatamente a conta que a SEFAZ refaz.
+     *
+     * <p>⭐ E a validação contra o <b>XSD oficial</b> é o que dá valor a este teste: a posição do
+     * {@code vDesc} dentro de {@code prod} é fixada pelo schema (entre {@code vUnTrib} e
+     * {@code indTot}), e errar a ordem é rejeição garantida que nenhuma asserção de texto pegaria.
+     */
+    @Test
+    void itemComDescontoLevaVDescEOTotalSaiLiquido() {
+        ItemDevolucao comDesconto = itemBase("102", null).comDesconto("19.90").build(1, 3);
+        TotaisDevolucao totais = new TotaisDevolucao(
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("199.90"), new BigDecimal("19.90"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("180.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, new BigDecimal("12.34"));
+
+        XmlMontado montado = montador.montar(new DevolucaoParaMontar(
+                AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO,
+                "DEVOLUCAO DE VENDA", CHAVE_ORIGINAL, 0, 1, emitente(), destinatarioPropriaLoja(),
+                List.of(comDesconto), totais,
+                "Devolucao referente a NFC-e " + CHAVE_ORIGINAL, respTec(), "Niner PDV 1.0"));
+
+        assertThatCode(() -> validarEstrutura(montado)).doesNotThrowAnyException();
+        assertThat(montado.xml())
+                .as("o desconto do item vai no XML, na posição que o XSD exige")
+                .contains("<vUnTrib>199.900000</vUnTrib><vDesc>19.90</vDesc><indTot>1</indTot>")
+                .as("e no total da nota")
+                .contains("<vDesc>19.90</vDesc>")
+                .as("vNF = vProd - vDesc: o valor que a venda de fato teve")
+                .contains("<vProd>199.90</vProd>")
+                .contains("<vNF>180.00</vNF>");
+    }
+
+    /**
+     * O par negativo do teste acima: sem desconto, <b>nenhuma tag</b> sai no item. A tag é opcional
+     * no schema, e escrever {@code 0.00} em toda linha de toda nota só polui o XML — mas o que
+     * torna este teste necessário é outra coisa: um montador que emitisse a tag sempre passaria no
+     * teste acima e ninguém notaria.
+     */
+    @Test
+    void itemSemDescontoNaoEscreveATagNoProduto() {
+        XmlMontado montado = montador.montar(devolucaoDeUmItem("102", null));
+
+        validarEstrutura(montado);
+        assertThat(montado.xml())
+                .as("sem desconto, o item vai direto de vUnTrib para indTot")
+                .contains("<vUnTrib>199.900000</vUnTrib><indTot>1</indTot>");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private DevolucaoParaMontar devolucaoDeUmItem(String csosn, String cstIcms) {
@@ -319,10 +379,17 @@ class MontadorXmlNfeDevolucaoTest {
         private BigDecimal baseIcms = BigDecimal.ZERO;
         private BigDecimal aliquotaIcms = BigDecimal.ZERO;
         private BigDecimal valorIcms = BigDecimal.ZERO;
+        /** `null` = sem desconto, que é o caso da esmagadora maioria das vendas. */
+        private BigDecimal valorDesconto;
 
         private ItemBuilder(String csosn, String cstIcms) {
             this.csosn = csosn;
             this.cstIcms = cstIcms;
+        }
+
+        ItemBuilder comDesconto(String valor) {
+            this.valorDesconto = new BigDecimal(valor);
+            return this;
         }
 
         ItemBuilder comIcms(BigDecimal base, BigDecimal aliquota, BigDecimal valor) {
@@ -336,7 +403,7 @@ class MontadorXmlNfeDevolucaoTest {
             return new ItemDevolucao(
                     nItem, nItemOriginal, "9001000031453", null, "BOLSA FEM ZETI REF: ZT-2070 MARROM",
                     "42022210", null, "1202", "UN",
-                    BigDecimal.ONE, new BigDecimal("199.90"), new BigDecimal("199.90"),
+                    BigDecimal.ONE, new BigDecimal("199.90"), new BigDecimal("199.90"), valorDesconto,
                     "UN", BigDecimal.ONE, new BigDecimal("199.90"), 0,
                     cstIcms, csosn, baseIcms, BigDecimal.ZERO, aliquotaIcms, valorIcms,
                     BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
