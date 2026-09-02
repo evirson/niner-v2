@@ -11,8 +11,13 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-09-01 (3).** Estado medido: **1190 testes verdes, 0 falhas** · migrations
-> até **V107** · `tsc -b` limpo · **7 documentos fiscais hoje, 7 autorizados, 0 rejeitados**.
+> **Última revisão: 2026-09-01 (5).** Estado medido: **1198 testes verdes, 0 falhas** · migrations
+> até **V109** · `tsc -b` limpo nos dois fronts · **7 documentos fiscais hoje, 7 autorizados**.
+>
+> ⭐ **Entrou o log de acesso ao ERP** (V109, `docs/MODULOLOGACESSO.md`): estudo, decisões dele e
+> implementação completa — banco, backend, tela no backoffice e 7 testes. As pendências novas são a
+> **85** (a tela não foi aberta no navegador), a **86** (IP errado ainda em dois pontos antigos) e a
+> **87** (arquivo de build versionado).
 >
 > 🔴→✅ **O que travava a operação CAIU:** ele redigitou o CSC e a **NFC-e voltou a emitir** (#75),
 > confirmado por mim de ponta a ponta (venda 638 → nota 62 autorizada). E o **#76 fechou por
@@ -934,6 +939,27 @@ trancasse todo mundo.
 teto **por conta** — o balde por IP é em memória e por instância (P6), então reinício da API zera e
 várias origens dividem o mesmo alvo sem estourar o balde de nenhuma.
 
+### 85. 🟢 Log de acesso: a tela do backoffice não foi aberta no navegador (2026-09-01)
+A API está exercitada por 7 testes e os quatro aparelhos de exemplo foram classificados certo em
+dados reais, mas **a tela `/acessos` não foi vista** — o backoffice exige login de staff e eu não
+digito senha. ⚠️ É exatamente o tipo de lacuna que já rendeu três defeitos neste projeto
+(o relatório de OS que não gerava, o "Confirmar Entrada" cinza por 13 motivos, a coluna Tempo Médio
+vazia). **Abrir assim que ele entrar no backoffice.**
+
+### 86. 🟢 O IP errado já gravado em `codigo_login` e `recuperacao_senha` (2026-09-01)
+O estudo do log achou: `OnboardingController` usava `getRemoteAddr()`, que **atrás do nginx é o IP
+do proxy**. O login foi corrigido (usa `IpDoCliente`), mas os **outros dois pontos continuam** com o
+valor antigo — `codigo_login.ip_solicitante` (2FA) e `recuperacao_senha.ip_solicitante`.
+
+⚠️ Nenhum dos dois é usado para decisão hoje, então não há defeito de comportamento: o que existe é
+**dado errado gravado**, e em produção. Trocar é de uma linha em cada; os registros antigos ficam
+como estão (não dá para saber o IP real depois).
+
+### 87. 🔵 `admin/tsconfig.app.tsbuildinfo` está versionado (2026-09-01)
+Arquivo de build do TypeScript no controle de versão: aparece modificado em todo commit que toca o
+backoffice, virando ruído no diff. Deveria estar no `.gitignore`. ⚠️ Achado de passagem, sem
+impacto funcional — mas é o tipo de coisa que ninguém remove depois porque "sempre esteve lá".
+
 ### 82. 🔴 NFS-e para no `E0116` em HOMOLOGAÇÃO — a saída é produção (2026-09-01)
 A NFS-e é montada, assinada e **chega ao Sefin Nacional**; a resposta é
 `E0116 — "A IM deve ser informada… conforme registrado no CNC NFS-e do município emissor"`.
@@ -1649,6 +1675,9 @@ a tarja do DANFE (decisão dele) · **#68** encolheu: Devolução, Orçamento e 
   **13** (Painel listado como futura).
 
 ### 🟢 O que sobrou da minha bola
+- **85** — a tela `/acessos` do backoffice **nunca foi aberta** (exige seu login de staff).
+- **86** — o IP errado (`getRemoteAddr()` atrás do nginx) continua em `codigo_login` e
+  `recuperacao_senha`; o login já foi corrigido.
 - **84** — venda sem nota não tem como emitir depois pela tela (os dois botões exigem
   `!reimpressao`); o servidor consegue, falta a tela.
 - **Expurgo de `plataforma.codigo_login`** — não existe nenhum: a tabela cresce para sempre e

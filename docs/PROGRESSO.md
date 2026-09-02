@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-01 (4) — a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-01 (5) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,75 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-01 (5) — LOG DE ACESSO AO ERP: do estudo à tela, e o teste que passava pelo motivo errado
+>
+> **Medido:** **1198 testes verdes** · `tsc -b` limpo nos dois fronts · migrations até **V109**.
+>
+> ### O estudo veio antes, e mudou o produto duas vezes
+>
+> Ele pediu um estudo de log de acesso com IP, sistema operacional, tipo de dispositivo, **marca do
+> aparelho** e **hora de logoff** (inclusive por inatividade). Duas coisas caíram por medição, e não
+> por opinião:
+>
+> - ⛔ **A marca do aparelho o navegador não entrega mais.** A *User-Agent Reduction* fez o Chrome no
+>   Android mandar `Android 10; K` — o modelo virou um **"K" fixo** — e o iPhone sempre mandou só
+>   `iPhone`. Safari e Firefox não implementam Client Hints, então nem `Sec-CH-UA-Model` cobriria o
+>   parque.
+> - ⛔ **"Logoff por inatividade" não existe como evento**: o navegador não avisa quando a pessoa vai
+>   embora. Ou se infere por job, ou se cria o evento com um timer que desloga. 🔵 Ele escolheu
+>   **nenhum dos dois**: *"pra não ficar deslogando o usuário, pois isso fica chato com o tempo"* —
+>   e registrar inferência numa trilha de auditoria é pior que não registrar.
+>
+> ⭐ **O corte simplificou o produto inteiro:** sem timer, sem endpoint de logout, sem `jti`, sem job
+> de sessão abandonada, sem estado de sessão no servidor. Virou um `INSERT` no login.
+>
+> ### 🔵 As decisões dele, todas registradas
+>
+> Sem marca · sem logoff · sem timer · **sem geolocalização** (por IP a cidade acerta 50–75% e
+> despenca em 4G, VPN e provedor pequeno — serviria de contexto, nunca de prova) · **mesmo banco**,
+> schema `plataforma` · **qualquer papel de staff** lê (recomendei `SUPER_ADMIN` e ele decidiu
+> diferente) · **retenção de 2 anos** · e a regra que fecha o assunto: *"se o funcionário pedir os
+> logs para o patrão, o patrão vai ter que pedir pra Vetor"*.
+>
+> ⛔ **MAC address é impossível pelo navegador** e ficou explicado no documento: o MAC vive na
+> camada 2 e **morre no primeiro roteador** — o que chegaria ao servidor seria o do último salto — e
+> JavaScript não vê hardware de rede.
+>
+> ### ⚠️ O erro que eu quase deixei passar, e é o mais instrutivo do dia
+>
+> Escrevi o teste que garante que **o lojista não alcança o log**, ele passou, e eu **sabotei para
+> conferir**: movi o controller de `/api/admin/acessos` para `/api/v1/acessos`. **O teste continuou
+> verde.** Ele passava por **ausência** — `/api/admin/acessos` deixava de existir e devolvia 401 —,
+> não por proteção. Era um teste que **defenderia o defeito** na próxima revisão.
+>
+> ⭐ Virou um **guarda estático**: varre `src/main/java` e reprova se algum arquivo com `"/api/v1`
+> mencionar `acesso_login`. Sabotado de novo, ele reprova **nomeando o arquivo**. ⚠️ E falha se não
+> encontrar os fontes, em vez de passar vazio.
+>
+> ### O que ficou de pé
+>
+> **V109** — `plataforma.acesso_login` com 4 índices (um **parcial só das falhas**, que é a pergunta
+> que a auditoria faz) e o **expurgo entregue junto** (`SECURITY DEFINER`; `niner_app` tem
+> INSERT/SELECT mas **não tem DELETE**). ⛔ O expurgo veio no primeiro dia porque
+> `plataforma.codigo_login` foi criada sem nenhum e cresce para sempre.
+>
+> **Backend** — `IpDoCliente` (a função correta saiu de dentro do rate limit e virou utilitário, o
+> que **conserta o defeito que o estudo achou**: o login usava `getRemoteAddr()`, que atrás do nginx
+> grava o IP do proxy — e o mesmo IP errado já ia para `codigo_login` e `recuperacao_senha`);
+> `UserAgentLido` (parser conservador, com a ordem dos testes comentada: `android` antes de `linux`,
+> `ipad` antes de `mobile`, Safari por último); `LoginRecusadoException`, que **carrega o motivo**
+> para não classificar pela mensagem; e a gravação **no controller, fora da transação** — a lição do
+> `201 com conta inexistente` de 18/08.
+>
+> **Tela** — backoffice ganhou a sexta: **Acessos**, com filtros, atalho "só falhas", badge por
+> resultado, User-Agent bruto no detalhe e o aviso "(sem proxy)" quando `ip_confiavel` é falso.
+>
+> ⚠️ **Declarado:** a tela **não foi aberta no navegador** — o backoffice exige login de staff e eu
+> não digito senha. Os quatro aparelhos de exemplo (Windows/Chrome, iPhone, Android, iPad) foram
+> classificados corretamente em dados reais, e a API está exercitada por 7 testes.
+>
+> ---
 
 > ## 📌 2026-09-01 (4) — A NFS-e CHEGOU AO SEFIN: três bloqueios empilhados, e o do meio era invisível
 >
