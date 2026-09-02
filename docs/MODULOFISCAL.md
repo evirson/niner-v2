@@ -26,7 +26,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF3 | Onde mora a inteligência tributária | ✅ **No Nainer** — perfil fiscal por produto/tenant, XML sai pronto |
 | DF4 | Reforma tributária (IBS/CBS/IS) | ✅ **Desde o v1, para TODOS os regimes** — motor e schema prontos mesmo para Simples/MEI; ver §8.5 |
 | DF5 | Certificado digital | ✅ **A1 (.pfx) por upload**, cifrado **no banco** (`fiscal_certificado.arquivo_cifrado`) — não em bucket, DF21 revisada em 2026-08-17 —, senha cifrada com chave fora do banco |
-| DF6 | UF piloto | ✅ **Paraná** — autorizador próprio (`nfce.sefa.pr.gov.br`), não SVRS; ver §9.4. ⚠️ "Piloto" é onde a **homologação** foi feita, não o alcance do produto: desde a **V047** as **27 UFs** estão carregadas em `cfg_uf_autorizador` |
+| DF6 | UF piloto | ✅ **Paraná** — autorizador próprio (`nfce.sefa.pr.gov.br`), não SVRS; ver §9.4. ⚠️ "Piloto" é onde a **homologação** foi feita, não o alcance do produto: desde a **V047** as **27 UFs** estão carregadas em `cfg_uf_autorizador`. 🔵 **Decisão dele em 2026-09-02: homologar SÓ no PR enquanto o ERP não estiver pronto** — *"mais pra frente, quando terminarmos o ERP, aí vamos ver a homologação em outros estados"*. ⛔ Não mexe no que está carregado: o adiado é **transmitir e conferir o `cStat`** fora do PR |
 | DF7 | Base técnica em Java | ✅ **Híbrido**: lib open-source para XSD/assinatura/QR + `HttpClient` do JDK no transporte. PoC na F0 é o gate |
 | DF8 | Emissão no PDV | ✅ **Síncrona na efetivação** + **contingência offline** |
 | DF10 | Cancelamento | ✅ **Uma operação só** — cancelar a venda cancela a nota, com trava de prazo legal |

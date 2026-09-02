@@ -434,7 +434,7 @@ transmissão em homologação, que hoje só você pode fazer.
 >   `os-imprimir-*` são declaradas em **CSS injetado em runtime**, que o script não lê.
 >
 > **⛔ Continua sem execução, e continua declarado:** correção criptográfica e XSD, tudo que depende
-> da resposta da SEFAZ (as 26 UFs fora do PR), impressão em papel, PDF de relatório com gráfico, e
+> da resposta da SEFAZ, impressão em papel, PDF de relatório com gráfico, e
 > as classes montadas por interpolação (116 linhas no `web`).
 
 **O texto original do item, para contexto:**
@@ -448,9 +448,22 @@ achar:
   interpolação (`className={\`uso-${x}\`}`) escapam desse script; provavelmente há mais.
 - **Correção criptográfica e conformidade de XSD** (assinatura do XML, AES-GCM das colunas
   `*_cifrado`) — não se verificam lendo, só executando.
-- **Tudo que depende da resposta da SEFAZ** — o `<ano>` da inutilização (#66), os autorizadores das
-  26 UFs fora do PR, e a reação real a qualquer XML montado. *Validação que confere o próprio
-  resultado não prova nada.*
+- **Tudo que depende da resposta da SEFAZ** — o `<ano>` da inutilização (#66) e a reação real a
+  qualquer XML montado. *Validação que confere o próprio resultado não prova nada.*
+
+  🔵 **As outras 26 UFs saíram do escopo por decisão dele (2026-09-02):** *"como estamos em fase de
+  homologação do ERP, por enquanto só vamos homologar no Paraná; mais pra frente, quando
+  terminarmos o ERP, aí vamos ver a homologação em outros estados."*
+
+  ⛔ **Isso NÃO é para remover nada.** As 27 UFs continuam carregadas em `cfg_uf_autorizador`
+  (V047, 108 linhas) e o CSRT continua por (UF, ambiente) — o desenho "regra que varia por UF é
+  LINHA, nunca `if`" segue valendo e não custa nada manter. O que ficou adiado é **transmitir e
+  conferir o `cStat`** fora do PR, que é trabalho de homologação, não de código.
+
+  ⚠️ **O que muda na prática:** deixa de ser lacuna e vira **pré-requisito de venda**. Antes de
+  ligar a primeira emissão de um lojista de outra UF, bata o `url_status_servico` dela (serviço
+  mais barato, não gera documento) — e lembre que **o autorizador muda com o MODELO**: BA e PE
+  autorizam a própria NF-e 55 e usam SVRS na NFC-e 65; MA usa SVAN no 55 e SVRS no 65.
 > ✅ **PARCIALMENTE FECHADO em 2026-09-01 — as duas primeiras corridas de verdade.** Até esta data
 > nenhum dos ~30 `FOR UPDATE` do projeto tinha sido **exercitado** com duas transações; agora dois
 > foram, os dois em caminho de dinheiro, os dois provados por sabotagem:
