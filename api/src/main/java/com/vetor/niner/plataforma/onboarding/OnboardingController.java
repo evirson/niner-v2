@@ -182,12 +182,16 @@ public class OnboardingController {
     /**
      * Pede a redefinição de senha. Responde <b>204 sempre</b> — inclusive para loja ou e-mail
      * inexistente: status diferente transformaria este endpoint numa lista de quem é cliente.
+     *
+     * <p>⚠️ O IP vem do {@link IpDoCliente}, nunca de {@code getRemoteAddr()} cru: atrás do nginx
+     * este último devolve o IP do <b>proxy</b>, e {@code recuperacao_senha.ip_solicitante} passaria
+     * a gravar sempre o mesmo endereço — dado de auditoria inútil, e errado só em produção.
      */
     @PostMapping("/recuperar-senha")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void recuperarSenha(
             @Valid @RequestBody SolicitarRecuperacaoRequest req, jakarta.servlet.http.HttpServletRequest http) {
-        recuperacao.solicitar(req, http.getRemoteAddr());
+        recuperacao.solicitar(req, ipDoCliente.de(http));
     }
 
     /** Redefine a senha com o token do e-mail (uso único, validade curta). */

@@ -35,3 +35,7 @@ docs/mercadopago/
 # `client_secret` da aplicação OAuth. Mesmo tratamento, pasta separada de propósito.
 docs/mercadolivre/
 *mercadolivre*secret*
+
+# Cache incremental do TypeScript (`tsc -b`). Regenerado a cada build e diferente em cada máquina:
+# versionado, aparecia modificado em todo commit que tocasse o front, virando ruído no diff.
+*.tsbuildinfo

@@ -83,6 +83,29 @@ public class DocumentoFiscalRepositorio {
      * linhas acima, descreve palavra por palavra; eu a reintroduzi copiando o método sem a
      * anotação. Ao copiar um método de repositório, <b>a anotação é parte do que se copia</b>.
      */
+    /**
+     * A venda foi <b>cancelada</b>? — guarda do servidor para a emissão (2026-09-02, pendência #84).
+     *
+     * <p>Desde que a papeleta reaberta passou a oferecer a <b>primeira</b> emissão de uma venda sem
+     * nota, existe um caminho de tela até a emissão que não passa pelo PDV. Esconder o botão nunca
+     * foi proteção (P4): o endpoint atende qualquer usuário do tenant, e emitir nota de uma venda
+     * cancelada declararia à SEFAZ uma operação que foi desfeita.
+     *
+     * <p>⛔ E {@code @Transactional} não é decoração — sem ele {@code tenant_atual()} vem NULL, a
+     * consulta casa zero linhas e a guarda responde <b>"não está cancelada" sempre</b>. É o defeito
+     * que o javadoc do método acima descreve palavra por palavra.
+     */
+    @Transactional(readOnly = true)
+    public boolean vendaCancelada(long idEmpresa, long idVenda) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT cancelada FROM venda
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                           AND id_venda = ?
+                        """)
+                .params(idEmpresa, idVenda)
+                .query(Boolean.class).optional().orElse(false));
+    }
+
     @Transactional(readOnly = true)
     public String numeroDaNotaVivaDaVendaQualquerModelo(long idEmpresa, long idVenda) {
         return jdbc.sql("""

@@ -116,7 +116,12 @@ public class AcessoLogAdminController {
                 .query((rs, n) -> new Linha(
                         rs.getLong("id_acesso"),
                         rs.getObject("ocorrido_em", OffsetDateTime.class),
-                        (Long) rs.getObject("id_tenant"),
+                        // ⚠️ `id_tenant` é `smallint`: o driver devolve Integer, e `(Long) getObject`
+                        // estourava com ClassCastException em TODA linha de acesso bem-sucedido —
+                        // a tela inteira respondia erro, e só o registro sem tenant (falha de
+                        // credencial antes de resolver a conta) escapava. Era o caso que o teste
+                        // usava, e por isso ele passava com o defeito de pé.
+                        idTenantDe(rs),
                         rs.getString("nome_conta"),
                         rs.getString("email_informado"),
                         rs.getString("resultado"),
@@ -129,6 +134,19 @@ public class AcessoLogAdminController {
                 .list();
 
         return new Pagina(itens, total, pagina, tamanho);
+    }
+
+    /**
+     * O tenant do acesso, ou {@code null} quando a tentativa nem chegou a resolver a conta.
+     *
+     * <p>⚠️ {@code getLong} + {@code wasNull} é o único par seguro aqui: {@code getLong} sozinho
+     * devolveria <b>0</b> para NULL — um id de tenant que não existe, mas que a tela mostraria
+     * como se existisse — e {@code getObject(…, Long.class)} não lê coluna {@code smallint} nesta
+     * versão do driver.
+     */
+    private static Long idTenantDe(java.sql.ResultSet rs) throws java.sql.SQLException {
+        long valor = rs.getLong("id_tenant");
+        return rs.wasNull() ? null : valor;
     }
 
     private static void exigirStaff(Jwt jwt) {

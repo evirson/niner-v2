@@ -1024,6 +1024,53 @@ class VendaFiscalEmissaoTest {
     }
 
     /**
+     * ⛔ <b>Venda cancelada não emite nota</b> — o guarda que a pendência #84 exigiu (2026-09-02).
+     *
+     * <p>A papeleta reaberta passou a oferecer a <b>primeira</b> emissão de uma venda que ficou sem
+     * nota. Isso criou um caminho de tela até uma venda <b>antiga</b>, e "a tela não oferece o
+     * botão" nunca foi proteção (P4): o endpoint atende qualquer usuário do tenant.
+     *
+     * <p>⭐ <b>O par negativo está no teste ao lado</b> ({@code segundaEmissaoDaMesmaVenda…} e todos
+     * os que emitem normalmente): eles provam que a venda <b>viva</b> continua emitindo. Sem esse
+     * par, um guarda que recusasse todo mundo passaria aqui — foi o defeito de 2026-08-27 na
+     * revogação de sessão.
+     */
+    @Test
+    void vendaCanceladaNaoEmiteNotaFiscal() throws Exception {
+        String token = assinarNovoTenant("cancelada-sem-nota");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "11222333000181";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscal(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO CANCELADO", idPerfil, "30.00");
+        long idCliente = criarClienteAnonimo(token, "Cliente Balcao");
+        long idFuncionario = criarFuncionario(token, "Vendedor Fiscal");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "30.00");
+
+        mvc.perform(post("/api/v1/vendas/cancelamento/" + idVenda).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"motivo\":\"Cliente desistiu da compra\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("cancelada")));
+
+        // ⚠️ A asserção que importa é a do BANCO: um teste que confere só o 409 passaria com uma
+        // recusa que acontecesse DEPOIS de reservar número e gravar a linha.
+        Mockito.verifyNoInteractions(transporte);
+        long notas = jdbc.sql("SELECT count(*) FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(Long.class).single();
+        assertThat(notas).as("venda cancelada não deixa documento fiscal nenhum").isZero();
+    }
+
+    /**
      * ⭐ Falha <b>depois</b> de o número estar reservado deixa RASTRO — pendência #71.
      *
      * <p>A numeração é reservada antes de montar o XML (tem de ser: o número entra na chave de

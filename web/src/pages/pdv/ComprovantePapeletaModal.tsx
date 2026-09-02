@@ -335,6 +335,37 @@ export default function ComprovantePapeletaModal({
             </div>
           )}
 
+          {/* ⭐ **Primeira emissão de uma venda que ficou sem nota** (2026-09-02, pendência #84).
+              Fechar o popup antes de emitir deixava a venda **sem documento e sem caminho pela
+              tela**: os dois gatilhos do PDV exigem `!reimpressao`, e Documentos Fiscais não tem
+              ação de emitir. Aconteceu de verdade com a venda 641.
+
+              ⛔ Isto **não** é reemitir — a regra "reimpressão nunca reemite" continua de pé e é o
+              que a condição `!dadosFiscais` garante: havendo nota viva, nenhum botão aparece aqui,
+              e o servidor recusa nomeando o número (`exigirVendaSemNota`). O que se abre é o caso
+              oposto, "nota que nunca existiu".
+
+              ⚠️ Venda cancelada não chega aqui: o comprovante dela nem carrega (409 no servidor,
+              decisão de 2026-08-20) — e a emissão tem guarda própria, porque esconder o botão
+              nunca foi proteção (P4). */}
+          {reimpressao && comprovante && !dadosFiscais && !mostrarPerguntaCpf && (
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              {/* ⚠️ `display: block` não é enfeite: `.tarja-aviso` é **flex**, e num texto com
+                  `<strong>` no meio cada pedaço vira um ITEM da flexbox — o aviso saiu quebrado em
+                  três colunas na primeira versão desta tela. Mesmo remédio de
+                  `AvisoIntensidadeImpressora`, que passou pelo mesmo tropeço. */}
+              <p className="tarja-aviso" style={{ display: 'block', margin: '0 0 8px', fontWeight: 500, lineHeight: 1.5 }}>
+                Esta venda <strong>não tem nota fiscal emitida</strong>. Se ela deveria ter, emita agora —
+                o valor e os itens são os da venda original.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn" onClick={() => setPedirCpfManual(true)}>
+                  Emitir Nota Fiscal
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
             {isLoading || !configFiscalCarregado ? (
               <p className="muted">Carregando…</p>

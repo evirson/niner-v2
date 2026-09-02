@@ -246,17 +246,26 @@ export default function DocumentoFiscalLista() {
       </div>
 
       <div className="lista-corpo">
-        <div className="abas" style={{ marginBottom: 12 }}>
+        {/* ⚠️ `abas-nav` + `aba-botao`, que é o vocabulário REAL do projeto (Parâmetros do Sistema
+            e Detalhe da Venda usam este mesmo par). Até 2026-09-02 aqui estava `abas` + `aba` +
+            `ativa` — três classes que **não existem** no `styles.css`: as duas abas saíam como
+            retângulos cinza colados, **sem marcar qual estava selecionada**, e nada acusava (passa
+            no `tsc -b`, no build e na suíte). Só apareceu abrindo a tela. */}
+        <div className="abas-nav" role="tablist" style={{ marginBottom: 12 }}>
           <button
             type="button"
-            className={aba === 'MERCADORIA' ? 'aba ativa' : 'aba'}
+            role="tab"
+            aria-selected={aba === 'MERCADORIA'}
+            className={`aba-botao ${aba === 'MERCADORIA' ? 'ativa' : ''}`}
             onClick={() => setAba('MERCADORIA')}
           >
             NF-e / NFC-e
           </button>
           <button
             type="button"
-            className={aba === 'SERVICO' ? 'aba ativa' : 'aba'}
+            role="tab"
+            aria-selected={aba === 'SERVICO'}
+            className={`aba-botao ${aba === 'SERVICO' ? 'ativa' : ''}`}
             onClick={() => setAba('SERVICO')}
           >
             NFS-e (serviço)

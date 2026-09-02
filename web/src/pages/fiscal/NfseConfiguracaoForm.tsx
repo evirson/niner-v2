@@ -312,8 +312,12 @@ export default function NfseConfiguracaoForm() {
 
               {/* ⛔ Não é opcional para optante: sem a alíquota efetiva o Sefin recusa com E0712,
                   e omitir o bloco totTrib recusa com E1235. Medido em produção. */}
+              {/* ⚠️ `display: block` abaixo: `.tarja-aviso` é **flex**, então o `<strong>` no meio
+                  da frase virava um ITEM da flexbox e o aviso saía repartido em colunas. Achado ao
+                  varrer os usos da classe em 2026-09-02 — o mesmo tropeço já tinha acontecido em
+                  `AvisoIntensidadeImpressora`. */}
               {optanteDoSimples && !form.aliquotaSimplesEfetiva.trim() && (
-                <div className="tarja-aviso">
+                <div className="tarja-aviso" style={{ display: 'block', fontWeight: 500, lineHeight: 1.5 }}>
                   A alíquota efetiva é <strong>obrigatória</strong> para optante do Simples: sem
                   ela o Sefin Nacional recusa a nota (E0712). O valor está no extrato do PGDAS-D do
                   mês anterior — confirme com seu contador.

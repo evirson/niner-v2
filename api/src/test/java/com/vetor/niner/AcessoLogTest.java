@@ -233,6 +233,62 @@ class AcessoLogTest {
     }
 
     /**
+     * ⚠️ O par do teste acima, e o que <b>faltava</b>: uma linha <b>com tenant</b>.
+     *
+     * <p>Achado ao abrir a tela pela primeira vez em 2026-09-02 (pendência 85): o controller fazia
+     * {@code (Long) rs.getObject("id_tenant")} sobre uma coluna {@code smallint}, que o driver
+     * devolve como {@code Integer} — {@code ClassCastException} em <b>toda linha de login bem
+     * sucedido</b>, ou seja, a tela inteira quebrada. Os 7 testes passavam porque o único registro
+     * que eles liam vinha de uma falha de credencial <b>sem slug</b>, que grava {@code id_tenant}
+     * nulo: {@code (Long) null} não estoura, e o cast nunca era exercitado.
+     *
+     * <p>⭐ Por isso a asserção aqui é o {@code idTenant} e o {@code nomeConta} da linha — o JOIN
+     * com {@code plataforma.tenant} só tem o que mostrar quando existe tenant, e é exatamente o
+     * caso que ninguém media.
+     */
+    @Test
+    void acessoBemSucedidoAparecePeloEndpointComContaEtenant() throws Exception {
+        criarConta("com-tenant");
+        mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON)
+                        .header("User-Agent", UA_CELULAR)
+                        .content("""
+                                {"email":"dono-com-tenant@acesso.com","senha":"segredo123"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty());
+
+        jdbc.sql("""
+                        INSERT INTO plataforma.staff (nome, email, senha_hash, papel, ativo)
+                        VALUES ('Suporte', 'suporte-com-tenant@vetor.com.br', ?,
+                                'SUPORTE'::plataforma.papel_staff, true)
+                        ON CONFLICT (lower(email)) DO NOTHING
+                        """)
+                .param(senhas.encode("senha-de-teste-123"))
+                .update();
+
+        String login = mvc.perform(post("/api/admin/sessao").contentType(APPLICATION_JSON)
+                        .content("""
+                                {"email":"suporte-com-tenant@vetor.com.br","senha":"senha-de-teste-123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String tokenStaff = JsonPath.read(login, "$.token");
+
+        String pagina = mvc.perform(get("/api/admin/acessos?email=dono-com-tenant")
+                        .header("Authorization", "Bearer " + tokenStaff))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<String>read(pagina, "$.itens[0].resultado")).isEqualTo("SUCESSO");
+        assertThat(JsonPath.<Integer>read(pagina, "$.itens[0].idTenant"))
+                .as("a linha de um login bem-sucedido carrega o tenant — era aqui que o cast estourava")
+                .isNotNull();
+        assertThat(JsonPath.<String>read(pagina, "$.itens[0].nomeConta"))
+                .as("o JOIN com plataforma.tenant traz o nome da loja para a tela")
+                .isNotBlank();
+    }
+
+    /**
      * ⛔ Critério 4: se o log falhar, o usuário <b>entra assim mesmo</b>.
      *
      * <p>Trilha de auditoria não pode impedir o lojista de trabalhar — e a sabotagem aqui é real:

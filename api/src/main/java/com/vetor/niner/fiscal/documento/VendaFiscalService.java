@@ -59,6 +59,7 @@ public class VendaFiscalService {
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
         Integer idUsuario = Integer.parseInt(jwt.getSubject());
 
+        exigirVendaNaoCancelada(idEmpresa, idVenda);
         exigirVendaSemNota(idEmpresa, idVenda);
 
         // ⚠️ Medido ANTES de qualquer emissão, e uma vez só: as duas pernas precisam concordar
@@ -193,6 +194,24 @@ public class VendaFiscalService {
      * precisam permitir nova tentativa: nos três primeiros casos a nota nunca existiu, e no quarto
      * a operação foi desfeita perante a SEFAZ.
      */
+    /**
+     * Recusa emitir nota de uma venda <b>cancelada</b> (2026-09-02, pendência #84).
+     *
+     * <p>⚠️ <b>Por que agora:</b> até esta data o único caminho de tela até aqui era o PDV, logo
+     * depois de efetivar a venda — que não tem como estar cancelada. Ao abrir a <b>primeira</b>
+     * emissão pela papeleta reaberta (Pesquisa de Vendas), passou a existir um caminho para uma
+     * venda antiga, e "a tela não oferece" nunca foi proteção (P4).
+     *
+     * <p>⛔ Emitir aqui declararia à SEFAZ uma operação <b>desfeita</b>, e o cancelamento da venda
+     * não teria mais o que cancelar do lado fiscal — a nota nasceria válida contra nada.
+     */
+    private void exigirVendaNaoCancelada(long idEmpresa, long idVenda) {
+        if (documentos.vendaCancelada(idEmpresa, idVenda)) {
+            throw new ConflitoDadosException(
+                    "A venda #" + idVenda + " foi cancelada — não é possível emitir nota fiscal para ela.");
+        }
+    }
+
     private void exigirVendaSemNota(long idEmpresa, long idVenda) {
         // ⛔ QUALQUER modelo, não só o 65 (auditoria 2026-08-29, rodada 4). Desde 2026-08-24 este
         // mesmo endpoint emite NF-e 55 quando o cliente é PJ — e quem decide é o assembler, DEPOIS

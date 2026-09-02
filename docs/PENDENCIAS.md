@@ -11,8 +11,26 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-09-01 (5).** Estado medido: **1198 testes verdes, 0 falhas** · migrations
-> até **V109** · `tsc -b` limpo nos dois fronts · **7 documentos fiscais hoje, 7 autorizados**.
+> **Última revisão: 2026-09-02.** Estado medido: **1202 testes verdes, 0 falhas** · migrations
+> até **V109** · `tsc -b` limpo nos dois fronts · **10 telas abertas no navegador**.
+>
+> ⚠️⚠️ **A tela `/acessos` NUNCA tinha funcionado — e os 7 testes dela passavam** (item **85**).
+> `(Long) rs.getObject("id_tenant")` sobre uma coluna `smallint`: `ClassCastException` em **toda
+> linha de login bem-sucedido**, ou seja, a tela inteira. O único registro que os testes liam vinha
+> de uma falha de credencial **sem slug**, que grava `id_tenant` nulo — e `(Long) null` não estoura.
+> ⭐ É a família de [[feedback_abrir_a_tela_acha_o_que_a_suite_nao_ve]] no seu formato mais puro: o
+> teste existia, era bom, e media o caso que não quebrava. Hoje há o par (`acessoBemSucedido…`),
+> provado por sabotagem.
+>
+> ⭐ **A busca da tela agora é sob demanda** (pedido dele em 2026-09-02: *"precisamos de um botão
+> localizar dados, pra quando clicar, aí sim puxa os dados"*). Antes ela consultava a maior tabela
+> do plano de controle **ao abrir e a cada tecla digitada no e-mail**.
+>
+> ⭐ **E a mesma varredura achou três defeitos de CSS que nada acusa** — `tsc -b`, suíte e build
+> passam limpos: as abas de **Documentos Fiscais** usavam `abas`/`aba`/`ativa`, **três classes
+> inexistentes** (saíam dois retângulos cinza, sem marcar a selecionada); a tela de **Acessos**
+> usava `badge`/`ghost`, que são do ERP e não existem no backoffice; e `.tarja-aviso` é **flex**,
+> então todo aviso com `<strong>` no meio saía **repartido em colunas** (dois casos).
 >
 > ⭐ **Entrou o log de acesso ao ERP** (V109, `docs/MODULOLOGACESSO.md`): estudo, decisões dele e
 > implementação completa — banco, backend, tela no backoffice e 7 testes. As pendências novas são a
@@ -390,7 +408,28 @@ diz sobre inutilização retroativa. ⚠️ E o desfecho na SEFAZ **não se prov
 transmissão em homologação, que hoje só você pode fazer.
 
 
-### 68. 🔵 Nada da auditoria de 5 rodadas foi EXECUTADO — o limite conhecido
+### 68. 🟡 A auditoria começou a ser EXECUTADA — primeira passada em 2026-09-02
+
+> **O que foi executado hoje** (o item continua aberto, mas deixou de ser "nada"):
+>
+> - **Dez telas abertas no navegador**, em três aplicações: `/acessos` (backoffice), Documentos
+>   Fiscais, Pesquisa de Vendas + papeleta reaberta (nos dois casos: com nota e sem nota), Fluxo de
+>   Caixa (gerado, com dados reais), Sangria de Caixa, Minha Conta, Painel, e o painel de escolha de
+>   grupo do site público. **Quatro defeitos que a suíte não via** saíram daí — três de CSS e um que
+>   quebrava a tela inteira (item 85).
+> - **O script de classes CSS foi reescrito e rodado nos dois fronts.** ⚠️ E ele mesmo precisou de
+>   duas correções antes de servir: acusava classe citada dentro de **comentário** e o literal do
+>   **lado esquerdo** de um ternário (`aba === 'MERCADORIA' ? …`). Resultado depois disso: `web`
+>   414 classes usadas / 445 declaradas, `admin` 39/39, com **1 achado real** (as abas de Documentos
+>   Fiscais) e o resto explicado — `dre-linha` é base sem estilo cujos modificadores existem
+>   (conferido na tela: o Fluxo de Caixa renderiza certo), e `orcamento-imprimir-bobina` /
+>   `os-imprimir-*` são declaradas em **CSS injetado em runtime**, que o script não lê.
+>
+> **⛔ Continua sem execução, e continua declarado:** correção criptográfica e XSD, tudo que depende
+> da resposta da SEFAZ (as 26 UFs fora do PR), impressão em papel, PDF de relatório com gráfico, e
+> as classes montadas por interpolação (116 linhas no `web`).
+
+**O texto original do item, para contexto:**
 As dez varreduras (5 rodadas × back e front) foram **leitura de código**, `tsc -b` e a suíte de
 testes. **Nenhuma tela foi aberta no navegador, nenhum PDF foi gerado, nada foi transmitido à
 SEFAZ.** Isso não invalida os ~75 defeitos corrigidos — mas define o que a auditoria **não** podia
@@ -783,12 +822,20 @@ A contratação vai perguntar se o cliente quer o plano grátis ou pago, mas **a
 existem** — nem preço, nem regra de quanto pesa cada CNPJ. Enquanto isso, a tela de contratação só
 consegue oferecer o gratuito. **Bola dele.**
 
-### 29. Tela de contratação com escolha de grupo (parte 2 do ramo) 🟢
-Comparar o ramo da empresa que entra com o das empresas do tenant e, quando diferentes, oferecer
-**mesmo grupo × grupo separado** explicando o impacto: mesmo grupo dá visão consolidada mas mistura
-cadastros; grupo separado limpa o cadastro mas **elimina a visão de grupo para sempre**, e são duas
-assinaturas. Combinado que a contratação acontece **fora do ERP**, na tela de contratação.
-**Bola minha**, depende do item 28 para a parte de planos.
+### 29. ✅ Tela de contratação com escolha de grupo — **CONFERIDA NA TELA em 2026-09-02**
+⚠️ **O item estava desatualizado: a parte minha já estava pronta** e eu não tinha conferido — foi
+implementada junto com o ramo (`site/src/pages/assinar.astro` + `ContratacaoGrupoTest`). Aberta no
+navegador hoje: quando o e-mail já tem conta, o formulário dá lugar ao painel *"Este e-mail já tem
+conta no Nainer"* com as duas saídas e o **"Em compensação"** de cada uma — juntar dá relatório
+somado mas mistura produtos/clientes/fornecedores; separar limpa o cadastro mas **elimina a visão
+de grupo** e são duas assinaturas.
+
+⭐ A assimetria de senha está na tela e no servidor: **juntar exige a senha** (vai mexer em dados
+que já são de alguém), **separar não** (é conta nova que só por acaso usa o mesmo e-mail). E, se o
+ramo escolhido for diferente do das empresas do grupo, há uma confirmação nomeando os dois ramos.
+
+**O que falta é do item 28 (bola dele):** enquanto as faixas pagas não existirem, a contratação só
+consegue oferecer o plano gratuito.
 
 ### 30. ✅ Ajustado por ele — **FECHADO em 2026-08-29** · SPF/DKIM/DMARC do domínio
 O SMTP da Hostinger foi configurado hoje e o e-mail chega, mas sem esses registros a mensagem tende
@@ -939,28 +986,60 @@ trancasse todo mundo.
 teto **por conta** — o balde por IP é em memória e por instância (P6), então reinício da API zera e
 várias origens dividem o mesmo alvo sem estourar o balde de nenhuma.
 
-### 85. 🟢 Log de acesso: a tela do backoffice não foi aberta no navegador (2026-09-01)
-A API está exercitada por 7 testes e os quatro aparelhos de exemplo foram classificados certo em
-dados reais, mas **a tela `/acessos` não foi vista** — o backoffice exige login de staff e eu não
-digito senha. ⚠️ É exatamente o tipo de lacuna que já rendeu três defeitos neste projeto
-(o relatório de OS que não gerava, o "Confirmar Entrada" cinza por 13 motivos, a coluna Tempo Médio
-vazia). **Abrir assim que ele entrar no backoffice.**
+### 85. ✅ Log de acesso: tela aberta — **e ela NUNCA tinha funcionado** (FECHADO em 2026-09-02)
 
-### 86. 🟢 O IP errado já gravado em `codigo_login` e `recuperacao_senha` (2026-09-01)
-O estudo do log achou: `OnboardingController` usava `getRemoteAddr()`, que **atrás do nginx é o IP
-do proxy**. O login foi corrigido (usa `IpDoCliente`), mas os **outros dois pontos continuam** com o
-valor antigo — `codigo_login.ip_solicitante` (2FA) e `recuperacao_senha.ip_solicitante`.
+A previsão do item se cumpriu inteira: a API estava exercitada por 7 testes verdes e **a tela
+respondia erro em toda consulta**.
 
-⚠️ Nenhum dos dois é usado para decisão hoje, então não há defeito de comportamento: o que existe é
-**dado errado gravado**, e em produção. Trocar é de uma linha em cada; os registros antigos ficam
-como estão (não dá para saber o IP real depois).
+**A causa:** `(Long) rs.getObject("id_tenant")` sobre uma coluna `smallint` — o driver devolve
+`Integer`, e o cast estoura com `ClassCastException` em **toda linha de login bem-sucedido**.
+A resposta chegava ao navegador como **403 com corpo vazio**, que parece falta de permissão e não
+é. Hoje é `getLong` + `wasNull` (⚠️ `getLong` sozinho devolveria **0** para NULL — um tenant que
+não existe, exibido como se existisse).
 
-### 87. 🔵 `admin/tsconfig.app.tsbuildinfo` está versionado (2026-09-01)
-Arquivo de build do TypeScript no controle de versão: aparece modificado em todo commit que toca o
-backoffice, virando ruído no diff. Deveria estar no `.gitignore`. ⚠️ Achado de passagem, sem
-impacto funcional — mas é o tipo de coisa que ninguém remove depois porque "sempre esteve lá".
+**⭐ Por que os 7 testes passavam.** O único registro que eles liam vinha de uma falha de
+credencial **sem slug**, que grava `id_tenant` **nulo** — e `(Long) null` não estoura. O caso com
+tenant, que é o normal, nunca foi lido. O par novo (`acessoBemSucedidoAparecePeloEndpointComContaEtenant`)
+foi **sabotado** para provar que pega: com o cast de volta, ele falha com a exceção exata.
+
+**⭐ O que ele pediu ao ver a tela (2026-09-02):** *"não tem dados nenhum, e precisamos de um botão
+localizar dados, pra quando clicar, aí sim puxa os dados"*. A tela agora **não consulta nada ao
+abrir** — antes ela varria a maior tabela do plano de controle ao abrir **e a cada tecla digitada
+no e-mail**. Três estados, três mensagens: "escolha os filtros e clique em Localizar dados",
+"carregando…" e "nenhum acesso com esses filtros" — *não pedi nada* não é *não achei nada*.
+
+**Mais o que só a tela mostra:** `badge badge-sucesso`/`btn ghost` são vocabulário do **ERP** e não
+existem no `admin/src/styles.css` (o backoffice usa `tag`/`tag-ok`/`tag-perigo` e `btn-secundario`)
+— os selos e os botões de paginação saíam sem estilo; o `<>` do `.map` ficava **sem `key`**; e o
+rótulo "Resultado" saía **ao lado** do `select` porque faltava a classe `campo` (os outros três
+filtros só pareciam certos porque `input` é `width: 100%`).
+
+### 86. ✅ O IP errado em `recuperacao_senha` — **FECHADO em 2026-09-02** (era UM ponto, não dois)
+
+⚠️ **O item errava a contagem, e medir foi o primeiro passo:** `codigo_login.ip_solicitante` (2FA)
+**já estava correto** — ele recebe o mesmo `ip` do login, que passa por `IpDoCliente` desde
+2026-09-01 (`signup.login(req, ipDoCliente.de(http))`). O único ponto restante era o
+`POST /api/publico/recuperar-senha`, corrigido agora.
+
+**⭐ O conserto durável não é a linha, é o guarda:** `IpDoClienteEhFonteUnicaTest` varre
+`src/main/java` e **reprova o build** em qualquer `getRemoteAddr()` fora das duas classes
+autorizadas (`IpDoCliente`, que faz a resolução, e `LimiteRequisicaoFilter`, que tem a mesma lógica
+embutida desde antes). Sem ele, o próximo endpoint que precisar do IP nasce com o mesmo defeito —
+que é **certo em dev** (sem proxy) e errado só em produção.
+
+Os registros antigos ficam como estão: não há como saber o IP real depois.
+
+### 87. ✅ `admin/tsconfig.app.tsbuildinfo` versionado — **FECHADO em 2026-09-02**
+`*.tsbuildinfo` entrou no `.gitignore` e os **dois** arquivos saíram do índice (`git rm --cached`)
+— eram dois, não um: `tsconfig.app` e `tsconfig.node`. O conteúdo é cache incremental do `tsc -b`,
+diferente em cada máquina.
 
 ### 82. 🔴 NFS-e para no `E0116` em HOMOLOGAÇÃO — a saída é produção (2026-09-01)
+
+> **Status em 2026-09-02:** ⏳ **continua aberto — a nota ainda NÃO foi emitida** (dito por ele
+> hoje). Nada mudou do lado do código; o ambiente do dev segue em **HOMOLOGACAO** (conferido no
+> banco: `fiscal_config_empresa.ambiente = 'HOMOLOGACAO'` para a empresa 1). Quando ele emitir,
+> conferir no banco se o retorno veio íntegro (chave, número, XML) e acompanhar o cancelamento.
 A NFS-e é montada, assinada e **chega ao Sefin Nacional**; a resposta é
 `E0116 — "A IM deve ser informada… conforme registrado no CNC NFS-e do município emissor"`.
 
@@ -990,14 +1069,27 @@ ela era só do front, que recusava a escolha e parecia falha de gravação.
 obra, com decisão de produto sobre **onde** o lojista informa (é por obra, não por serviço). ⛔ Ele
 disse explicitamente que **não quer isso agora**.
 
-### 84. 🟢 Venda sem nota não tem como emitir depois pela tela (2026-09-01)
-Os dois caminhos de emissão do PDV exigem `!reimpressao`: a pergunta automática do CPF e o botão
-manual "Emitir Nota Fiscal". Reabrindo a papeleta pela Pesquisa de Vendas **nenhum aparece**, e
-Documentos Fiscais não tem ação de emitir.
+### 84. ✅ Venda sem nota agora emite pela tela — **FECHADO em 2026-09-02**
 
-Resultado: **venda efetivada cujo cupom foi fechado antes de emitir fica sem documento, sem caminho
-pela tela** — aconteceu com a venda 641 hoje. O servidor consegue
-(`POST /pdv/vendas/{id}/nfce` funciona); falta a tela oferecer, com o mesmo guarda de hoje.
+A papeleta reaberta (Pesquisa de Vendas › Reimprimir papeleta) mostra uma tarja — *"Esta venda não
+tem nota fiscal emitida"* — e um botão **Emitir Nota Fiscal**, que abre a **mesma** confirmação de
+CPF do PDV, com observações da nota e a escolha do modelo.
+
+⛔ **Isto não é reemitir**, e a regra *"reimpressão nunca reemite"* continua inteira: a condição é
+`!dadosFiscais`, então venda **com** nota viva não mostra nada (conferido na tela: a venda 638
+reabre como "Reimpressão de Nota Fiscal — NFC-e", sem tarja e sem botão) e o servidor recusa
+nomeando o número. O que se abriu é o caso oposto — **nota que nunca existiu**.
+
+**⭐ Guarda novo no servidor:** `exigirVendaNaoCancelada`. Até aqui o único caminho até a emissão
+era o PDV logo após efetivar, onde a venda não pode estar cancelada; abrir a papeleta antiga criou
+um caminho para uma venda de qualquer data, e **esconder o botão nunca foi proteção** (P4). Preso
+por `VendaFiscalEmissaoTest.vendaCanceladaNaoEmiteNotaFiscal`, que confere o **banco** (zero
+documentos) e não só o 409 — sabotado, o teste falha com **400** em vez de 409, o que mostra que
+sem a trava a emissão seguia adiante.
+
+⚠️ **Medido na tela, não inferido:** a venda 648 (só serviço) oferece corretamente **NFS-e**, não
+NFC-e. E a tarja precisou de `display: block` — `.tarja-aviso` é flex, e o `<strong>` do meio da
+frase virava um item da flexbox, quebrando o aviso em colunas.
 
 ### 80. 🔵 Backoffice sem restrição por IP — **esperando a Vetor ter IP fixo** (2026-09-01)
 Hoje `admin.nainer.com.br` está **aberto à internet**, com o login de staff como tranca única. O

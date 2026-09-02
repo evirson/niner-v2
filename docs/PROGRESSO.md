@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-01 (5) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-02 — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,95 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-02 — ABRIR AS TELAS: a de Acessos nunca tinha funcionado, e 7 testes verdes não viam
+>
+> **Medido:** **1202 testes verdes, 0 falhas** · `tsc -b` limpo nos dois fronts · migrations até
+> **V109** (nenhuma nova) · **10 telas abertas no navegador**, nas três aplicações.
+>
+> ### ⚠️⚠️ O defeito do dia: a tela `/acessos` respondia erro em TODA consulta
+>
+> Ele mandou abrir a tela do log de acesso (pendência 85). A primeira consulta voltou vazia, sem
+> mensagem nenhuma. O log da API tinha a resposta:
+>
+> ```
+> java.lang.ClassCastException: class java.lang.Integer cannot be cast to class java.lang.Long
+> ```
+>
+> `(Long) rs.getObject("id_tenant")` sobre uma coluna **`smallint`**: o driver devolve `Integer`.
+> Toda linha de **login bem-sucedido** estourava — ou seja, a tela inteira. E o erro chegava ao
+> navegador como **403 com corpo vazio**, que parece falta de permissão e manda o diagnóstico para o
+> lado errado (perdi duas rodadas conferindo token e cadeia de segurança).
+>
+> **⭐ Por que os 7 testes passavam — e esta é a parte que vale guardar.** O único registro que eles
+> liam vinha de uma falha de credencial **sem slug**, que grava `id_tenant` **nulo**; e `(Long) null`
+> não estoura. O teste era bom, media uma coisa verdadeira, e **nunca tocava o caso normal**. Hoje há
+> o par (`acessoBemSucedidoAparecePeloEndpointComContaEtenant`), provado por **sabotagem**: com o
+> cast de volta, ele falha com a exceção exata.
+>
+> ⚠️ Correção: `getLong` + `wasNull`. `getLong` sozinho devolveria **0** para NULL — um id de tenant
+> que não existe, exibido na tela como se existisse.
+>
+> ### 🔵 O que ele pediu ao ver a tela
+>
+> *"não tem dados nenhum, e precisamos de um botão localizar dados, pra quando clicar, aí sim puxa os
+> dados"*. A tela **não consulta mais nada ao abrir**. Antes ela varria a maior tabela do plano de
+> controle — que cresce a cada login de cada lojista — ao abrir **e a cada tecla digitada no campo de
+> e-mail**, jogando fora o resultado no caractere seguinte. Auditoria se faz com o filtro pronto.
+>
+> São **três estados e três mensagens**, porque *"não pedi nada"* não é *"não achei nada"*: "escolha
+> os filtros e clique em **Localizar dados**", "carregando…" e "nenhum acesso com esses filtros".
+> A paginação some enquanto nada foi localizado.
+>
+> ### ⚠️ Três defeitos de CSS que nada acusa — nem `tsc -b`, nem a suíte, nem o build
+>
+> 1. **Documentos Fiscais** usava `abas` + `aba` + `ativa`. **Nenhuma das três existe**: o
+>    vocabulário do projeto é `abas-nav` + `aba-botao` + `ativa`. As duas abas (NF-e/NFC-e e NFS-e)
+>    saíam como retângulos cinza colados, **sem marcar qual estava selecionada**.
+> 2. **Acessos** usava `badge badge-sucesso` e `btn ghost` — vocabulário do **ERP**, que não existe
+>    no `admin/src/styles.css` (lá é `tag`/`tag-ok`/`tag-perigo` e `btn-secundario`). Selos e botões
+>    de paginação sem estilo. No mesmo arquivo: `<>` do `.map` **sem `key`**, e o rótulo "Resultado"
+>    ao lado do `select` por faltar a classe `campo` — os outros três filtros só *pareciam* certos
+>    porque `input` é `width: 100%` e empurrava o label para cima sozinho.
+> 3. **`.tarja-aviso` é `display: flex`** — então um aviso com `<strong>` no meio da frase vira
+>    **três itens da flexbox** e sai repartido em colunas. Aconteceu no aviso novo da papeleta e já
+>    estava de pé na Configuração da NFS-e (o aviso da alíquota do Simples). Os dois corrigidos com
+>    `display: block`, o mesmo remédio que `AvisoIntensidadeImpressora` já usava.
+>
+> ### ⭐ Venda sem nota agora emite pela tela (pendência 84)
+>
+> A papeleta reaberta mostra a tarja *"Esta venda não tem nota fiscal emitida"* e o botão **Emitir
+> Nota Fiscal**, que abre a mesma confirmação de CPF do PDV. ⛔ **Não é reemitir** — a condição é
+> `!dadosFiscais`, e a regra *"reimpressão nunca reemite"* continua inteira: conferido na tela, a
+> venda 638 (com NFC-e) reabre sem tarja e sem botão. O que se abriu é o caso oposto: **nota que
+> nunca existiu**.
+>
+> **Guarda novo no servidor**, porque esconder o botão nunca foi proteção (P4): `exigirVendaNaoCancelada`.
+> Preso por teste que confere o **banco** (zero documentos), e **sabotado** — sem a trava, a resposta
+> é 400 em vez de 409, prova de que a emissão seguia adiante.
+>
+> ⚠️ Medido na tela: a venda 648, que é **só de serviço**, oferece corretamente **NFS-e**.
+>
+> ### O resto da lista dele
+>
+> - **86** — o item dizia "dois pontos" e era **um**: `codigo_login.ip_solicitante` já estava certo
+>   desde 01/09 (recebe o mesmo `ip` do login). Corrigido o `recuperar-senha`, e — o que importa —
+>   criado `IpDoClienteEhFonteUnicaTest`, que **reprova o build** em qualquer `getRemoteAddr()` fora
+>   de `IpDoCliente` e `LimiteRequisicaoFilter`. Sem o guarda, o próximo endpoint nasce com o mesmo
+>   defeito: **certo em dev, errado só em produção**.
+> - **87** — `*.tsbuildinfo` no `.gitignore`; eram **dois** arquivos, não um.
+> - **29** — a tela de escolha de grupo **já estava pronta** e eu não tinha conferido. Aberta no
+>   site: os dois caminhos, o "Em compensação" de cada um e a assimetria de senha (juntar exige,
+>   separar não). O que falta é do item 28, que é dele.
+> - **68** — a auditoria começou a ser **executada**. O script de classes CSS foi reescrito e rodado
+>   nos dois fronts; ⚠️ ele mesmo precisou de duas correções antes de servir (acusava classe citada
+>   em **comentário** e o literal do **lado esquerdo** de um ternário). Guarda que acusa falso treina
+>   quem lê a falha a ignorá-lo.
+> - **82** — ⏳ **a NFS-e em produção continua pendente**: ele disse hoje que ainda não emitiu. O dev
+>   segue em `HOMOLOGACAO` (conferido no banco).
+
+
+---
 
 > ## 📌 2026-09-01 (5) — LOG DE ACESSO AO ERP: do estudo à tela, e o teste que passava pelo motivo errado
 >
