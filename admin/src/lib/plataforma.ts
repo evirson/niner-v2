@@ -215,3 +215,55 @@ export function salvarCsrt(
 export function excluirCsrt(uf: string, ambiente: number): Promise<void> {
   return api<void>(`/api/admin/fiscal/csrt/${uf}/${ambiente}`, { method: 'DELETE' })
 }
+
+// ---------------------------------------------------------------- log de acesso ao ERP
+
+/**
+ * Uma tentativa de entrar no ERP — sucesso ou falha (docs/MODULOLOGACESSO.md).
+ *
+ * ⚠️ `userAgent` é o texto BRUTO, e vem junto de propósito: `so`, `navegador` e `dispositivo` são
+ * interpretação do servidor, e quem audita precisa poder ver o original.
+ *
+ * ⚠️ `ipConfiavel = false` significa que o IP veio de `getRemoteAddr()` sem proxy confiável — pode
+ * ser o endereço do proxy, não o do cliente. A tela mostra isso; um dado de auditoria que não se
+ * explica sozinho vira discussão.
+ */
+export interface AcessoLogin {
+  idAcesso: number
+  ocorridoEm: string
+  idTenant: number | null
+  nomeConta: string | null
+  emailInformado: string
+  resultado: string
+  ip: string | null
+  ipConfiavel: boolean
+  so: string | null
+  navegador: string | null
+  dispositivo: string | null
+  userAgent: string | null
+}
+
+export interface PaginaAcessos {
+  itens: AcessoLogin[]
+  total: number
+  pagina: number
+  limite: number
+}
+
+export function listarAcessos(filtros: {
+  de?: string
+  ate?: string
+  email?: string
+  resultado?: string
+  somenteFalhas?: boolean
+  pagina?: number
+}): Promise<PaginaAcessos> {
+  const q = new URLSearchParams()
+  if (filtros.de) q.set('de', filtros.de)
+  if (filtros.ate) q.set('ate', filtros.ate)
+  if (filtros.email) q.set('email', filtros.email)
+  if (filtros.resultado) q.set('resultado', filtros.resultado)
+  if (filtros.somenteFalhas) q.set('somenteFalhas', 'true')
+  q.set('pagina', String(filtros.pagina ?? 1))
+  return api<PaginaAcessos>(`/api/admin/acessos?${q}`)
+}

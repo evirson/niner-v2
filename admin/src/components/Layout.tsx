@@ -7,6 +7,7 @@ const ITENS = [
   { para: '/leads', rotulo: 'Leads' },
   { para: '/configuracao', rotulo: 'Configuração' },
   { para: '/csrt', rotulo: 'CSRT por UF' },
+  { para: '/acessos', rotulo: 'Acessos' },
 ]
 
 export default function Layout() {
