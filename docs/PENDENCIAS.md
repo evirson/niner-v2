@@ -768,8 +768,41 @@ defeito.
 para reprocessar) é suficiente para o cliente de NF-e 55, ou vale abrir a frente de SVC junto com
 uma janela de homologação?
 
-### 23. CSOSN 500 com ST retido (`cStat 938`)
-Minha, mas **depende do contador**.
+### 23. ✅ CSOSN 500 com ST retido — **FECHADO em 2026-09-02** (V110)
+
+**O que era, medido no banco e não suposto:** as NF-e 55 desta loja voltavam com
+`cStat 938 — "Nao informada vBCSTRet, pST e vICMSSTRet. [nItem:1]"` (documentos 63 e 76, em 24/08
+e 27/08). Mercadoria com ICMS já retido sai com **CSOSN 500** no Simples, e no modelo 55 a SEFAZ
+exige, junto do código, o que foi retido lá atrás. O montador escrevia só `orig` + `CSOSN`: o XSD
+aceita (o bloco é `minOccurs="0"`), a SEFAZ não.
+
+⚠️ **E `cfg_csosn.exige_st_retido` já marcava o 500 desde a V035** — o catálogo sabia e nenhum
+código lia a coluna. Hoje é ela que decide, não uma lista fixa em Java.
+
+**🔵 As duas decisões dele (2026-09-02, conferidas com o contador):**
+
+| Pergunta | Decisão |
+|---|---|
+| De onde vem o valor? | **Da entrada por XML** daquele produto (`entrada_nfe_item`, por unidade × qtd vendida) — é o que o fornecedor de fato reteve. **Cadastro do produto como reserva**, para a mercadoria que nunca entrou por XML |
+| E quando não há em lugar nenhum? | **Recusar antes de emitir** (F11), nomeando o produto e onde preencher — nunca deixar a SEFAZ rejeitar depois de queimar o número |
+
+⛔ **O guarda só barra no modelo 55, e isso foi medido:** neste banco há **9 itens** com CSOSN 500
+em NFC-e **autorizadas** e **16** em NF-e 55 **rejeitadas com 938**. A SEFAZ/PR não exige o bloco no
+65 — travar os dois modelos consertaria a venda a PJ quebrando o balcão inteiro.
+
+**O que entrou:** V110 (três colunas em `produto`, por **unidade**, com CHECK de par e nulo ≠ zero),
+a leitura da última entrada por XML, o `pST` derivado quando não informado, o bloco no XML (na ordem
+do XSD), o guarda com a mensagem que diz onde resolver, os campos na tela do Produto (só mercadoria)
+e a **gravação** em `documento_fiscal_item` — sem ela, a NF-e 55 de **devolução**, que espelha a
+tributação da nota original, cairia no mesmo 938 pela porta ao lado.
+
+⚠️ **Quatro testes existentes falharam ao ligar o guarda, e isso era a prova:** eles montavam
+exatamente a nota que a SEFAZ rejeitou, e passavam. O fixture passou a ter o dado; o teste novo
+(`vendaAPjComCsosn500SemStRetidoEhRecusadaAntesDeQueimarNumero`) confere que a sequência do modelo
+55 **nem é criada** — nenhuma linha em `fiscal_numeracao` — e que a SEFAZ não foi procurada.
+
+⛔ **Declarado:** nada foi transmitido. O XSD está conferido (o teste valida contra o schema
+oficial); o `cStat` de uma emissão real com o bloco, não.
 
 ### 24. ✅ **FECHADO em 2026-08-31** — Efetivar Balanço e Tipo de Carteira ganharam spec
 `docs/telas/efetivar-balanco.md` e `docs/telas/tipo-carteira.md`, as duas **derivadas do código**

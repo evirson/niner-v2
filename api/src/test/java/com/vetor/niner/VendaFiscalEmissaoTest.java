@@ -195,7 +195,22 @@ class VendaFiscalEmissaoTest {
                 .andReturn().getResponse().getContentAsString();
         long idProduto = ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
 
-        jdbc.sql("UPDATE produto SET id_perfil_fiscal = ? WHERE id_tenant = ? AND id_produto = ?")
+        // ⛔ O ST retido entra aqui porque, sem ele, TODA venda a contribuinte deste fixture cai no
+        // guarda da pendência 23 — o perfil fiscal usa CSOSN 500 na regra de CONTRIBUINTE, e a
+        // NF-e 55 exige `vBCSTRet`/`pST`/`vICMSSTRet` (a SEFAZ/PR rejeitou duas vezes com
+        // `cStat 938` antes de isso existir). ⚠️ Quatro testes desta classe montavam exatamente
+        // aquela nota e passavam: eles **prendiam o defeito**, e é por isso que este fixture mudou
+        // em vez de o guarda ser afrouxado.
+        //
+        // ⚠️ Por UNIDADE: R$ 12,00 de base e R$ 2,16 de ICMS-ST por peça (18%). Quem quiser testar
+        // a AUSÊNCIA do dado limpa as colunas — é o que faz `vendaAPjComCsosn500SemStRetido…`.
+        jdbc.sql("""
+                        UPDATE produto
+                           SET id_perfil_fiscal = ?,
+                               st_retido_base_unitario = 12.0000,
+                               st_retido_valor_unitario = 2.1600
+                         WHERE id_tenant = ? AND id_produto = ?
+                        """)
                 .params(idPerfil, idTenant, idProduto).update();
 
         long idVariacao = jdbc.sql("""
@@ -663,6 +678,79 @@ class VendaFiscalEmissaoTest {
     }
 
     /**
+     * ⛔ <b>NF-e 55 com CSOSN 500 e sem o ST retido é recusada ANTES de reservar número</b>
+     * (pendência 23, {@code cStat 938}).
+     *
+     * <p>Mercadoria com ICMS já retido por substituição sai com CSOSN 500 no Simples, e no modelo
+     * 55 a SEFAZ exige, junto do código, o que foi retido lá atrás — {@code vBCSTRet}, {@code pST},
+     * {@code vICMSSTRet}. O XSD aceita sem (o bloco é {@code minOccurs="0"}), a SEFAZ não: medido
+     * no PR em 24/08 e 27/08, com este texto exato.
+     *
+     * <p>⭐ <b>Decisão do dono do produto (2026-09-02): recusar, não deixar rejeitar.</b> A
+     * diferença não é o erro — é o que fica para trás. Deixando seguir, cada tentativa **queima um
+     * número da série** e devolve uma mensagem da SEFAZ que não diz onde resolver; número queimado
+     * vira buraco de numeração e obrigação de inutilização formal.
+     */
+    @Test
+    void vendaAPjComCsosn500SemStRetidoEhRecusadaAntesDeQueimarNumero() throws Exception {
+        String token = assinarNovoTenant("st-retido-ausente");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "33444555000143";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscalComNfe(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO SEM ST RETIDO", idPerfil, "80.00");
+        long idCliente = criarClienteContribuinte(token, idTenant, "Revendedora Sem ST");
+        completarCadastroParaNfe(idTenant, idCliente);
+        long idFuncionario = criarFuncionario(token, "Vendedor Sem ST");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        // ⚠️ O produto NUNCA entrou por XML de compra (nenhum `entrada_nfe_item`) e o cadastro é
+        // limpo aqui — é o estado real de quem migra de outro sistema e vende antes de comprar.
+        jdbc.sql("""
+                        UPDATE produto
+                           SET st_retido_base_unitario = NULL, st_retido_valor_unitario = NULL
+                         WHERE id_tenant = ? AND id_produto =
+                               (SELECT id_produto FROM produto_barra
+                                 WHERE id_tenant = ? AND id_variacao = ?)
+                        """)
+                .params(idTenant, idTenant, idVariacao).update();
+
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "80.00");
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("PRODUTO SEM ST RETIDO")))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("cadastro do Produto")));
+
+        // ⭐ AS DUAS ASSERÇÕES QUE IMPORTAM, e nenhuma delas é o status HTTP:
+        // 1. a SEFAZ não foi procurada — o F11 é bloqueio PREVENTIVO, não reação a uma rejeição;
+        Mockito.verifyNoInteractions(transporte);
+        // 2. e a numeração do modelo 55 sequer EXISTE — a linha de `fiscal_numeracao` nasce na
+        //    primeira reserva, então "nenhuma linha" é a prova mais forte de que nada foi
+        //    consumido. Recusar depois de reservar produziria um buraco de numeração a cada
+        //    tentativa, que é obrigação de inutilização formal perante a SEFAZ.
+        Long linhasDeNumeracao55 = jdbc.sql("""
+                        SELECT count(*) FROM fiscal_numeracao
+                         WHERE id_tenant = ? AND id_empresa = ? AND modelo = 55
+                        """)
+                .params(idTenant, idEmpresa).query(Long.class).single();
+        assertThat(linhasDeNumeracao55)
+                .as("a recusa preventiva não pode nem criar a sequência do modelo 55")
+                .isZero();
+
+        // E não ficou documento nenhum para trás.
+        Long documentos = jdbc.sql("SELECT count(*) FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(Long.class).single();
+        assertThat(documentos).isZero();
+    }
+
+    /**
      * Venda a contribuinte de ICMS sai em <b>NF-e 55</b>, não em NFC-e (2026-08-24).
      *
      * <p>⚠️ Confere o <b>XML gravado</b>, não só a situação: o que prova que saiu a nota certa é o
@@ -670,6 +758,11 @@ class VendaFiscalEmissaoTest {
      * destinatário e a <b>ausência</b> do QR Code — o grupo {@code infNFeSupl} não existe no XSD do
      * 55, então incluí-lo seria rejeição de schema. Um teste que olhasse só o status passaria com
      * uma NFC-e disfarçada de 55.
+     *
+     * <p>⭐ <b>É também o par positivo do guarda de ST retido</b> (pendência 23): a mesma venda,
+     * com o dado presente, emite — e o bloco {@code ICMSSN500} completo é conferido no fim.
+     * ⚠️ Até 2026-09-02 este teste passava **sem** o bloco: ele prendia o defeito que a SEFAZ
+     * rejeitava.
      */
     @Test
     void vendaAContribuinteSaiEmNfe55ComEnderecoESemQrCode() throws Exception {
@@ -739,6 +832,31 @@ class VendaFiscalEmissaoTest {
         // ⚠️ O grupo do QR Code não existe no XSD da NF-e 55 — presença aqui é rejeição de schema.
         assertThat(xml).as("NF-e 55 não tem QR Code").doesNotContain("infNFeSupl");
         assertThat(xml).doesNotContain("qrCode");
+
+        // ⛔ O ST JÁ RETIDO, que é o que fazia esta nota ser recusada (pendência 23). Esta venda usa
+        // a regra de CONTRIBUINTE do perfil, que sai com CSOSN 500 — e a SEFAZ/PR devolveu
+        // `cStat 938 — "Nao informada vBCSTRet, pST e vICMSSTRet"` nas duas transmissões reais de
+        // 24/08 e 27/08. ⚠️ Este teste passava sem o bloco: ele prendia o defeito.
+        //
+        // 1 unidade × R$ 12,00 de base e R$ 2,16 de ST por peça (fixture) → 18% derivados.
+        assertThat(xml)
+                .as("o bloco de ST retido, na ordem do XSD")
+                .contains("<CSOSN>500</CSOSN><vBCSTRet>12.00</vBCSTRet><pST>18.0000</pST>"
+                        + "<vICMSSTRet>2.16</vICMSSTRet>");
+
+        // E o que foi declarado fica GRAVADO: é daqui que a NF-e 55 de devolução espelha o bloco.
+        var stGravado = jdbc.sql("""
+                        SELECT base_st_retido, icms_st_retido FROM documento_fiscal_item
+                         WHERE id_tenant = ? AND id_documento_fiscal =
+                               (SELECT id_documento_fiscal FROM documento_fiscal
+                                 WHERE id_tenant = ? AND id_venda = ?)
+                        """)
+                .params(idTenant, idTenant, idVenda)
+                .query((rs, n) -> new java.math.BigDecimal[] {
+                        rs.getBigDecimal("base_st_retido"), rs.getBigDecimal("icms_st_retido") })
+                .single();
+        assertThat(stGravado[0]).isEqualByComparingTo("12.00");
+        assertThat(stGravado[1]).isEqualByComparingTo("2.16");
 
         // ⭐⭐ A OUTRA PONTA: o DANFE tem de MOSTRAR o que o XML tem (relato dele, 2026-09-01).
         //

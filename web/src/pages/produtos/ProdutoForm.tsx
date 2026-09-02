@@ -905,6 +905,69 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
               </select>
             </div>
           </div>
+
+          {/* ⛔ ST JÁ RETIDO — só para mercadoria (ICMS; serviço é ISS e o servidor recusa).
+              Pendência 23: a NF-e 55 de um produto com CSOSN 500 é rejeitada com `cStat 938`
+              ("Nao informada vBCSTRet, pST e vICMSSTRet") quando estes valores não existem.
+
+              ⭐ A fonte preferida é a ENTRADA por XML — o que o fornecedor de fato reteve. Estes
+              campos são a reserva, e é por isso que o texto abaixo diz isso: preenchidos sem
+              necessidade, eles PASSAM NA FRENTE de nada (a entrada continua vencendo), mas o
+              lojista precisa saber que o caminho normal é a compra chegar por XML. */}
+          {!ehServico && (
+            <>
+              <p className="section-label" style={{ marginTop: 18 }}>ICMS-ST já retido (CSOSN 500)</p>
+              <p className="muted" style={{ marginTop: -4 }}>
+                Só para mercadoria comprada com ICMS-ST já retido pelo fornecedor. <strong>Quando a
+                compra entra por XML, o sistema usa o valor da própria nota do fornecedor</strong> —
+                preencha aqui só se este produto nunca entrou por XML. Sem o valor, a NF-e (venda a
+                CNPJ) não é emitida. Confirme os números com o seu contador.
+              </p>
+              <div className="form-grid">
+                <div className="col-4">
+                  <label htmlFor="stRetidoBaseUnitario">Base do ST por unidade</label>
+                  <input
+                    id="stRetidoBaseUnitario"
+                    value={form.stRetidoBaseUnitario}
+                    onChange={(e) => setForm((f) => ({ ...f, stRetidoBaseUnitario: mascararMoeda(e.target.value) }))}
+                    onBlur={(e) => setForm((f) => ({ ...f, stRetidoBaseUnitario: completarMoeda(e.target.value) }))}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="Em branco: não informado"
+                  />
+                </div>
+                <div className="col-4">
+                  <label htmlFor="stRetidoValorUnitario">ICMS-ST por unidade</label>
+                  <input
+                    id="stRetidoValorUnitario"
+                    value={form.stRetidoValorUnitario}
+                    onChange={(e) => setForm((f) => ({ ...f, stRetidoValorUnitario: mascararMoeda(e.target.value) }))}
+                    onBlur={(e) => setForm((f) => ({ ...f, stRetidoValorUnitario: completarMoeda(e.target.value) }))}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="Em branco: não informado"
+                  />
+                </div>
+                <div className="col-4">
+                  <label htmlFor="stRetidoAliquota">Alíquota do ST (%)</label>
+                  <input
+                    id="stRetidoAliquota"
+                    value={form.stRetidoAliquota}
+                    onChange={(e) => setForm((f) => ({ ...f, stRetidoAliquota: mascararPercentual(e.target.value) }))}
+                    onBlur={(e) => setForm((f) => ({ ...f, stRetidoAliquota: completarPercentual(e.target.value) }))}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="Em branco: calculada"
+                  />
+                </div>
+              </div>
+              {/* ⚠️ Os dois primeiros andam juntos — o banco tem CHECK para isso, e um 409 vindo do
+                  CHECK diria "registro em uso por outro cadastro". Avisar aqui é mais barato. */}
+              {(form.stRetidoBaseUnitario.trim() === '') !== (form.stRetidoValorUnitario.trim() === '') && (
+                <p className="erro-campo">
+                  Informe <strong>base e valor juntos</strong> — um sem o outro não forma o dado que a
+                  nota exige.
+                </p>
+              )}
+            </>
+          )}
         </section>
 
         {/* ⛔ Serviço não tem categoria (pedido do dono do produto, 2026-08-31): a árvore de

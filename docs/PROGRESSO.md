@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-02 (2) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,78 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-02 (3) — O `cStat 938` CAIU: CSOSN 500 sem o ST retido (V110)
+>
+> **Medido:** **1207 testes verdes, 0 falhas** · migrations até **V110** · `tsc -b` limpo · tela do
+> Produto aberta e o dado conferido no banco.
+>
+> ### O defeito, com a prova no próprio banco
+>
+> ```
+> cStat 938 — "Nao informada vBCSTRet, pST e vICMSSTRet. [nItem:1]"
+> ```
+>
+> Duas rejeições reais (documentos 63 e 76, em 24/08 e 27/08). Mercadoria com ICMS já retido por
+> substituição sai com **CSOSN 500** no Simples, e no modelo 55 a SEFAZ exige, junto do código, o
+> que foi retido lá atrás. O montador escrevia só `orig` + `CSOSN`.
+>
+> ⭐ **É o exemplo mais limpo de "XSD não é o contrato da SEFAZ"**: o bloco é `minOccurs="0"` no
+> schema, então validar e concluir "está certo" era exatamente o erro.
+>
+> ⚠️ **E o catálogo já sabia:** `cfg_csosn.exige_st_retido` marca o 500 desde a V035, e **nenhum
+> código lia a coluna**. Dado declarado que ninguém consome — hoje é ela que decide.
+>
+> ### 🔵 As duas decisões dele (conferidas com o contador)
+>
+> **De onde vem o valor:** da **entrada por XML** do produto — é o que o fornecedor de fato reteve
+> (`entrada_nfe_item`, por unidade × qtd vendida), com o **cadastro do produto como reserva** para
+> a mercadoria que nunca entrou por XML. **Quando não há em lugar nenhum:** recusar antes de
+> emitir, nomeando o produto e onde preencher.
+>
+> ⚠️ **Por unidade, e é aqui que a conta erraria em silêncio:** a entrada guarda o total do item (o
+> ST de 12 unidades) e a venda pode ser de 1. Usar o total direto declararia 12× o ST numa venda de
+> uma peça — e a nota seria **autorizada**, porque a SEFAZ não sabe quantas unidades a compra teve.
+>
+> ### ⛔ O guarda só barra no modelo 55, e isso foi MEDIDO antes de escrever
+>
+> Neste banco: **9 itens** com CSOSN 500 em NFC-e **autorizadas** contra **16** em NF-e 55
+> **rejeitadas**. A SEFAZ/PR não exige o bloco no 65. Travar os dois modelos consertaria a venda a
+> PJ e quebraria o balcão inteiro — o defeito que se troca por um pior.
+>
+> ### ⚠️ Quatro testes existentes falharam ao ligar o guarda, e essa foi a melhor prova
+>
+> Eles montavam **exatamente** a nota que a SEFAZ rejeitou com 938, e passavam há semanas: o
+> fixture usa um perfil cuja regra de CONTRIBUINTE sai com CSOSN 500. Eram testes que **prendiam o
+> defeito**. O fixture passou a ter o dado; o teste novo confere que a sequência do modelo 55 **nem
+> chega a ser criada** e que a SEFAZ não foi procurada.
+>
+> ⭐ E o teste de montador que dizia, no próprio javadoc, *"sai só orig+CSOSN e o schema aceita"*
+> foi **invertido**, não apagado: sem o dado o comportamento continua correto — para o modelo 65.
+>
+> ### O que a correção varreu além do ponto original
+>
+> - **Gravar** o ST retido em `documento_fiscal_item`: a NF-e 55 de **devolução** espelha a
+>   tributação da nota original e cairia no mesmo 938 pela porta ao lado;
+> - o montador da **devolução** também passou a emitir o bloco, com `pST` derivado do par gravado;
+> - **serviço recusa** os campos (ST retido é ICMS, serviço é ISS), na lista que já existia;
+> - o **importador de produtos** manda `null` de propósito — inventar o número na planilha o
+>   gravaria como "informado pelo contador".
+>
+> ### ⚠️ Duas armadilhas de ferramental, de novo
+>
+> 1. **`mvn compile` incremental mentiu duas vezes** — inclusive depois de eu ter escrito a lição
+>    hoje de manhã. `clean` acusou o construtor de record que não casava mais.
+> 2. **Arquivo em CRLF**: as buscas multilinha dos meus scripts falhavam em silêncio até eu medir
+>    (`s.includes('')` → true). Normalizar antes de comparar virou parte do script.
+>
+> ### ⛔ Declarado
+>
+> Nada foi transmitido à SEFAZ. O XSD está conferido; o `cStat` de uma emissão real com o bloco,
+> não. E o produto que usei para testar a tela teve o valor **apagado** depois — número inventado
+> num campo que vai para nota fiscal não pode ficar no cadastro dele.
+
+---
 
 > ## 📌 2026-09-02 (2) — A NF-e DE DEVOLUÇÃO SAIU DO BRUTO, nas duas pontas
 >

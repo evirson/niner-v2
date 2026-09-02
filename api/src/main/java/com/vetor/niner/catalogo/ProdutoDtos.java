@@ -47,6 +47,26 @@ public final class ProdutoDtos {
             Boolean ativo,
             List<Long> categorias,
             Long idPerfilFiscal,
+            /**
+             * ST <b>ja retido</b> por unidade -- {@code vBCSTRet} e {@code vICMSSTRet} do
+             * {@code ICMSSN500} (pendencia 23, 2026-09-02).
+             *
+             * <p>* <b>Reserva</b>, nao fonte principal: quando o produto tem entrada por XML de
+             * compra, o valor vem de la -- e o que o fornecedor de fato reteve. Estes campos valem
+             * para a mercadoria que nunca entrou por XML, caso em que so o contador sabe o numero.
+             *
+             * <p>Sem eles (e sem entrada), a <b>NF-e 55</b> de um produto com CSOSN 500 e recusada
+             * antes de reservar numero: a SEFAZ rejeita com {@code cStat 938}. A NFC-e 65 nao e
+             * afetada -- a SEFAZ nao exige o bloco nela.
+             *
+             * <p>Nulo != zero: nulo e "ninguem informou" (a nota nao sai), zero e "o contador
+             * disse que nao ha retencao neste produto" (a nota sai com 0,00).
+             */
+            BigDecimal stRetidoBaseUnitario,
+            BigDecimal stRetidoValorUnitario,
+            /** {@code pST}. Nulo faz o sistema derivar (valor / base x 100), que e a aliquota
+             *  coerente com o que foi de fato retido. */
+            BigDecimal stRetidoAliquota,
             /* --- serviço (V085, bloco S1 de docs/MODULOSERVICOS.md) --- */
             /**
              * {@code MERCADORIA} (padrão) ou {@code SERVICO}. Nulo = MERCADORIA, para o cliente
@@ -106,6 +126,10 @@ public final class ProdutoDtos {
             List<ProdutoImagemDtos.ImagemResponse> imagens,
             Long idPerfilFiscal,
             String nomePerfilFiscal,
+            /** ST ja retido por unidade (CSOSN 500) -- ver o request. */
+            BigDecimal stRetidoBaseUnitario,
+            BigDecimal stRetidoValorUnitario,
+            BigDecimal stRetidoAliquota,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm,
             OffsetDateTime reajustadoEm) {

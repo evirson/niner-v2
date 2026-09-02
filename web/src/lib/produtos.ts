@@ -44,6 +44,10 @@ export interface Produto {
   categorias: CategoriaSelecionada[]
   imagens: ImagemProduto[]
   idPerfilFiscal: number | null
+  /** ST já retido por unidade (CSOSN 500) — reserva para o produto sem entrada por XML. */
+  stRetidoBaseUnitario: number | null
+  stRetidoValorUnitario: number | null
+  stRetidoAliquota: number | null
   /** MERCADORIA (padrão) ou SERVICO — V085. */
   tipoItem: TipoItem
   duracaoMinutos: number | null
@@ -83,6 +87,11 @@ export interface ProdutoFormState {
   /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.2/DF3) — opcional aqui de propósito: quem
    * cobra o preenchimento antes de emitir é a tela de Conformidade Fiscal, não este cadastro. */
   idPerfilFiscal: number | null
+  /** ST já retido por unidade (CSOSN 500). Vazio = não informado, e é o que faz a NF-e 55
+   *  recusar antes de reservar número; "0,00" é informação (não há retenção). */
+  stRetidoBaseUnitario: string
+  stRetidoValorUnitario: string
+  stRetidoAliquota: string
   /** ⚠️ Só escolhido na CRIAÇÃO: o tipo é imutável (trigger da V085) e a tela desabilita o
    *  seletor ao editar — trocar deixaria estoque, relatórios e notas já emitidas
    *  descrevendo o item como ele era. */
@@ -116,6 +125,9 @@ export const PRODUTO_VAZIO: ProdutoFormState = {
   ativo: true,
   categorias: [],
   idPerfilFiscal: null,
+  stRetidoBaseUnitario: '',
+  stRetidoValorUnitario: '',
+  stRetidoAliquota: '',
   tipoItem: 'MERCADORIA',
   duracaoMinutos: '',
   percComissaoServico: '',
@@ -152,6 +164,11 @@ export function paraFormulario(p: Produto): ProdutoFormState {
     ativo: p.ativo,
     categorias: [...p.categorias].sort((a, b) => a.indice - b.indice),
     idPerfilFiscal: p.idPerfilFiscal,
+    // ⚠️ `== null`, não `||`: zero é informação aqui ("o contador conferiu e não há retenção")
+    // e viraria campo vazio, que significa o oposto — a nota deixaria de sair.
+    stRetidoBaseUnitario: p.stRetidoBaseUnitario == null ? '' : formatarMoeda(p.stRetidoBaseUnitario),
+    stRetidoValorUnitario: p.stRetidoValorUnitario == null ? '' : formatarMoeda(p.stRetidoValorUnitario),
+    stRetidoAliquota: p.stRetidoAliquota == null ? '' : formatarPercentual(p.stRetidoAliquota),
     tipoItem: p.tipoItem ?? 'MERCADORIA',
     duracaoMinutos: p.duracaoMinutos == null ? '' : String(p.duracaoMinutos),
     percComissaoServico: p.percComissaoServico == null ? '' : formatarPercentual(p.percComissaoServico),
@@ -199,6 +216,10 @@ export function paraRequisicao(f: ProdutoFormState) {
     ativo: f.ativo,
     categorias: ehServico ? [] : f.categorias.map((c) => c.idCategoria),
     idPerfilFiscal: f.idPerfilFiscal,
+    // ST retido é ICMS: serviço não tem, e o servidor recusa nomeando o campo se vier.
+    stRetidoBaseUnitario: soMercadoria(f.stRetidoBaseUnitario.trim() ? desmascararMoeda(f.stRetidoBaseUnitario) : null),
+    stRetidoValorUnitario: soMercadoria(f.stRetidoValorUnitario.trim() ? desmascararMoeda(f.stRetidoValorUnitario) : null),
+    stRetidoAliquota: soMercadoria(f.stRetidoAliquota.trim() ? desmascararPercentual(f.stRetidoAliquota) : null),
     tipoItem: f.tipoItem,
     // Só fazem sentido em serviço; vazio vira null (zero é valor legítimo em percentual).
     duracaoMinutos: f.tipoItem === 'SERVICO' && f.duracaoMinutos.trim() ? Number(f.duracaoMinutos) : null,

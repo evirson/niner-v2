@@ -66,6 +66,8 @@ public class MontadorXmlNfeDevolucao {
     private static final String VERSAO_LAYOUT = "4.00";
     private static final int MODELO_NFE = 55;
     private static final String SEM_GTIN = "SEM GTIN";
+    /** Fator de 100 para derivar o `pST` do par base+valor gravado na nota original. */
+    private static final BigDecimal CEM = new BigDecimal("100");
     /** {@code tpEmis = 1} — normal. A devolução não entra em contingência offline: é operação de
      *  retaguarda, sem cliente esperando no caixa (diferente da venda, §9.7). */
     private static final int TP_EMIS_NORMAL = 1;
@@ -290,7 +292,26 @@ public class MontadorXmlNfeDevolucao {
             if (CSOSN_GRUPO_102.contains(csosn)) {
                 xml.append("<ICMSSN102>").append(tag("orig", orig)).append(tag("CSOSN", csosn)).append("</ICMSSN102>");
             } else if ("500".equals(csosn)) {
-                xml.append("<ICMSSN500>").append(tag("orig", orig)).append(tag("CSOSN", csosn)).append("</ICMSSN500>");
+                // ⛔ O ST retido também vai na DEVOLUÇÃO (2026-09-02, pendência 23). A nota de
+                // entrada é modelo 55 — o mesmo modelo que a SEFAZ recusa com `cStat 938` quando o
+                // bloco falta. E aqui os valores são **espelhados** da NFC-e original
+                // (`documento_fiscal_item.base_st_retido`/`icms_st_retido`), como todo o resto da
+                // tributação: recalcular seria inventar um ST que a venda não declarou.
+                //
+                // ⚠️ `pST` é DERIVADO (valor / base × 100) porque a coluna não existe em
+                // `documento_fiscal_item` — o que está gravado é o par base+valor, e a alíquota
+                // coerente com eles é essa. Guardar uma terceira coluna só para isso criaria a
+                // chance de ela divergir das outras duas.
+                xml.append("<ICMSSN500>").append(tag("orig", orig)).append(tag("CSOSN", csosn));
+                BigDecimal baseRet = item.baseStRetido();
+                BigDecimal valorRet = item.icmsStRetido();
+                if (baseRet != null && valorRet != null && baseRet.signum() > 0) {
+                    xml.append(tag("vBCSTRet", dec(baseRet, 2)))
+                            .append(tag("pST", dec(valorRet.multiply(CEM)
+                                    .divide(baseRet, 4, java.math.RoundingMode.HALF_UP), 4)))
+                            .append(tag("vICMSSTRet", dec(valorRet, 2)));
+                }
+                xml.append("</ICMSSN500>");
             } else {
                 throw new MontagemInvalidaException(
                         ("A NFC-e original tem CSOSN %s, que o v1 não sabe espelhar numa devolução "

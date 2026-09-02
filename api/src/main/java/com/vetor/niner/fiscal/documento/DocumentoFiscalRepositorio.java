@@ -550,6 +550,12 @@ public class DocumentoFiscalRepositorio {
                                 quantidade, valor_unitario, valor_produto, valor_desconto,
                                 unidade_tributavel, quantidade_trib, valor_unitario_trib, origem_mercadoria,
                                 cst_icms, csosn, base_calculo_icms, perc_reducao_bc, aliquota_icms, valor_icms,
+                                -- ⛔ O ST JA RETIDO tem de ser GRAVADO, nao so escrito no XML
+                                -- (2026-09-02, pendencia 23). A NF-e 55 de DEVOLUCAO espelha a
+                                -- tributacao daqui: sem estas duas colunas, devolver uma venda com
+                                -- CSOSN 500 emitiria a nota de entrada sem o bloco e ela cairia no
+                                -- mesmo cStat 938 -- o defeito reaparecendo pela porta ao lado.
+                                base_st_retido, icms_st_retido,
                                 aliquota_fcp, valor_fcp,
                                 cst_pis, base_calculo_pis, aliquota_pis, valor_pis,
                                 cst_cofins, base_calculo_cofins, aliquota_cofins, valor_cofins,
@@ -568,6 +574,7 @@ public class DocumentoFiscalRepositorio {
                                     ?, ?, ?, ?,
                                     ?, ?, ?, ?, ?, ?,
                                     ?, ?,
+                                    ?, ?,
                                     ?, ?, ?, ?,
                                     ?, ?, ?, ?,
                                     ?, ?, ?, ?, ?,
@@ -583,7 +590,9 @@ public class DocumentoFiscalRepositorio {
                             item.valorUnitarioTributavel() != null ? item.valorUnitarioTributavel() : item.valorUnitario(),
                             item.origemMercadoria(),
                             icms.cst(), icms.csosn(), nz(icms.baseCalculo()), nz(icms.percReducaoBc()),
-                            nz(icms.aliquota()), nz(icms.valor()), nz(icms.aliquotaFcp()), nz(icms.valorFcp()),
+                            nz(icms.aliquota()), nz(icms.valor()),
+                            nz(icms.baseStRetido()), nz(icms.valorStRetido()),
+                            nz(icms.aliquotaFcp()), nz(icms.valorFcp()),
                             pis.cst(), nz(pis.baseCalculo()), nz(pis.aliquota()), nz(pis.valor()),
                             cofins.cst(), nz(cofins.baseCalculo()), nz(cofins.aliquota()), nz(cofins.valor()),
                             temIbs ? ibs.cst() : null, temIbs ? ibs.cClassTrib() : null,

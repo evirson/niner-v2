@@ -177,7 +177,7 @@ public class MotorTributario {
                 throw new TributacaoInvalidaException("Item %d: CST de ICMS %s inválido.".formatted(nItem, cst));
             }
             if (CST_SEM_ICMS.contains(cst)) {
-                return new Icms(cst, null, zero(), zero(), zero(), zero(), zero(), zero());
+                return new Icms(cst, null, zero(), zero(), zero(), zero(), zero(), zero(), null, null, null);
             }
             if (!CST_ICMS_JA_RETIDO.contains(cst) && nz(regra.aliquotaIcms()).signum() == 0) {
                 throw new TributacaoInvalidaException(
@@ -201,7 +201,7 @@ public class MotorTributario {
         if (CSOSN_SEM_ICMS.contains(csosn)) {
             // 102/103/300/400 não destacam ICMS: o grupo sai só com orig e CSOSN. Campo a mais
             // rejeita tanto quanto campo a menos (§8.2).
-            return new Icms(null, csosn, zero(), zero(), zero(), zero(), zero(), zero());
+            return new Icms(null, csosn, zero(), zero(), zero(), zero(), zero(), zero(), null, null, null);
         }
         // 202/900 — Montador ainda recusa esses dois (grupo de ST completo não calculado, §4.2);
         // chega aqui só pra cair na exceção de montagem, não pra declarar valor de verdade.
@@ -215,7 +215,7 @@ public class MotorTributario {
         BigDecimal valor = percentual(baseIcms, aliquota);
         BigDecimal aliqFcp = nz(regra.aliquotaFcp());
         BigDecimal valorFcp = percentual(baseIcms, aliqFcp);
-        return new Icms(cst, csosn, baseIcms, aliquota, valor, reducao, aliqFcp, valorFcp);
+        return new Icms(cst, csosn, baseIcms, aliquota, valor, reducao, aliqFcp, valorFcp, null, null, null);
     }
 
     // ---------------------------------------------------------------- PIS/COFINS (§8.3)

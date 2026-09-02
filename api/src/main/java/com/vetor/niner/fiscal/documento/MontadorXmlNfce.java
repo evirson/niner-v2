@@ -378,10 +378,27 @@ public class MontadorXmlNfce {
             if (CSOSN_GRUPO_102.contains(csosn)) {
                 xml.append("<ICMSSN102>").append(tag("orig", orig)).append(tag("CSOSN", csosn)).append("</ICMSSN102>");
             } else if ("500".equals(csosn)) {
-                // O bloco de ST retido (vBCSTRet/pST/vICMSSTRet) é <xs:sequence minOccurs="0">
-                // no XSD — e o motor não calcula esses valores (são do ST retido lá atrás, na
-                // compra, não desta venda). Sai só orig+CSOSN, que o schema aceita.
-                xml.append("<ICMSSN500>").append(tag("orig", orig)).append(tag("CSOSN", csosn)).append("</ICMSSN500>");
+                // ⛔ O bloco de ST retido é `<xs:sequence minOccurs="0">` no XSD — o schema aceita
+                // sem ele, e **a SEFAZ não**: medido em 2026-08-24 e 27/08 no PR,
+                // `cStat 938 — "Nao informada vBCSTRet, pST e vICMSSTRet. [nItem:1]"`. Era a
+                // pendência 23, e é o exemplo mais limpo de [[feedback_xsd_nao_e_o_contrato_da_sefaz]]:
+                // validar contra o schema e concluir "está certo" reprovou na transmissão.
+                //
+                // ⚠️ Os três valores NÃO são desta venda — são o que o fornecedor reteve na compra.
+                // Quem os resolve é o `VendaFiscalAssembler` (entrada por XML, cadastro do produto
+                // como reserva), e é ele que recusa a NF-e 55 quando não existem.
+                //
+                // ⚠️ A ordem é do XSD: vBCSTRet, pST, vICMSSTRet — com `vICMSSubstituto` opcional
+                // no meio, que não emitimos. Trocar a ordem é rejeição garantida.
+                //
+                // Ausente (NFC-e 65, que a SEFAZ aceita sem o bloco), sai como sempre saiu.
+                xml.append("<ICMSSN500>").append(tag("orig", orig)).append(tag("CSOSN", csosn));
+                if (icms.temStRetido()) {
+                    xml.append(tag("vBCSTRet", dec(icms.baseStRetido(), 2)))
+                            .append(tag("pST", dec(icms.aliquotaStRetido(), 4)))
+                            .append(tag("vICMSSTRet", dec(icms.valorStRetido(), 2)));
+                }
+                xml.append("</ICMSSN500>");
             } else if ("202".equals(csosn) || "203".equals(csosn)) {
                 throw new MontagemInvalidaException(
                         ("CSOSN %s exige o grupo completo de ST (modBCST, vBCST, pICMSST, vICMSST), que o motor "

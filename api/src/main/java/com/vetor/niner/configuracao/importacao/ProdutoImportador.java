@@ -257,6 +257,10 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 ImportacaoPlanilha.decimal("PESO_BRUTO", linha.valor("PESO_BRUTO")),
                 ImportacaoPlanilha.decimal("PESO_LIQUIDO", linha.valor("PESO_LIQUIDO")),
                 idGrade, true, List.of(), idPerfilFiscal,
+                // ST retido (CSOSN 500) nao vem na planilha: a fonte preferida e a entrada por
+                // XML, e inventar o numero aqui gravaria como "informado pelo contador" algo
+                // que ninguem mediu -- e ele iria para uma nota fiscal (2026-09-02).
+                null, null, null,
                 // A planilha de importação é de MERCADORIA — serviço não tem estoque inicial nem
                 // código de barras, que é o que esta carga existe para trazer. Quando o bloco S5
                 // criar a planilha de serviços, ela terá colunas próprias (LC 116, ISS), não uma

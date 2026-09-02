@@ -167,8 +167,11 @@ public class ProdutoService {
             long id = jdbc.sql("""
                             INSERT INTO produto (id_tenant, ativo, marca, referencia, descricao, preco_custo,
                                 percentual_venda, preco_venda, data_inicio_oferta, data_final_oferta, preco_oferta,
-                                codigo_ncm, peso_bruto, peso_liquido, id_grade, id_perfil_fiscal, tipo_item)
+                                codigo_ncm, peso_bruto, peso_liquido, id_grade, id_perfil_fiscal,
+                                st_retido_base_unitario, st_retido_valor_unitario, st_retido_aliquota,
+                                tipo_item)
                             VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?,
                                     CAST(? AS tipo_item))
                             RETURNING id_produto
                             """)
@@ -226,7 +229,9 @@ public class ProdutoService {
                                 ativo = ?, marca = ?, referencia = ?, descricao = ?, preco_custo = ?,
                                 percentual_venda = ?, preco_venda = ?, data_inicio_oferta = ?, data_final_oferta = ?,
                                 preco_oferta = ?, codigo_ncm = ?, peso_bruto = ?, peso_liquido = ?,
-                                id_grade = ?, id_perfil_fiscal = ?, atualizado_em = now()
+                                id_grade = ?, id_perfil_fiscal = ?,
+                                st_retido_base_unitario = ?, st_retido_valor_unitario = ?,
+                                st_retido_aliquota = ?, atualizado_em = now()
                             WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .params(params)
@@ -394,6 +399,9 @@ public class ProdutoService {
         if (req.dataFinalOferta() != null) indevidos.add("Final da oferta");
         if (req.precoOferta() != null) indevidos.add("Preço de oferta");
         if (req.categorias() != null && !req.categorias().isEmpty()) indevidos.add("Categorias");
+        // ST retido e ICMS, e servico e ISS -- nem o campo faz sentido aqui (2026-09-02).
+        if (req.stRetidoBaseUnitario() != null || req.stRetidoValorUnitario() != null
+                || req.stRetidoAliquota() != null) indevidos.add("ST retido");
         if (!indevidos.isEmpty()) {
             throw new IllegalArgumentException(
                     "Serviço não tem " + String.join(", ", indevidos) + " — esses campos são de mercadoria.");
@@ -512,6 +520,13 @@ public class ProdutoService {
         params.add(r.pesoLiquido() == null ? BigDecimal.ZERO : r.pesoLiquido());
         params.add(usaCorGrade && r.idGrade() != null ? r.idGrade() : 1L);
         params.add(r.idPerfilFiscal());
+        // ST ja retido (CSOSN 500, pendencia 23). Nulo != zero e por isso nao ha COALESCE:
+        // nulo significa "ninguem informou" e faz a NF-e 55 recusar antes de reservar numero;
+        // zero significa "o contador conferiu e nao ha retencao". Trocar um pelo outro faria
+        // a nota sair declarando ST zero sobre mercadoria que teve retencao.
+        params.add(r.stRetidoBaseUnitario());
+        params.add(r.stRetidoValorUnitario());
+        params.add(r.stRetidoAliquota());
     }
 
     private static String trimMaiusculoOuNulo(String s) {
@@ -670,6 +685,7 @@ public class ProdutoService {
                    p.preco_venda, p.data_inicio_oferta, p.data_final_oferta, p.preco_oferta, p.codigo_ncm,
                    p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
                    p.id_perfil_fiscal, pf.nome AS nome_perfil_fiscal,
+                   p.st_retido_base_unitario, p.st_retido_valor_unitario, p.st_retido_aliquota,
                    p.tipo_item, ps.duracao_minutos, ps.perc_comissao AS perc_comissao_servico,
                    ps.codigo_tributacao_nacional, ps.codigo_tributacao_municipal,
                    ps.aliquota_iss, COALESCE(ps.iss_retido_padrao, false) AS iss_retido_padrao,
@@ -730,6 +746,9 @@ public class ProdutoService {
                 produtoImagemService.listar(id),
                 idPerfilFiscal,
                 rs.getString("nome_perfil_fiscal"),
+                rs.getBigDecimal("st_retido_base_unitario"),
+                rs.getBigDecimal("st_retido_valor_unitario"),
+                rs.getBigDecimal("st_retido_aliquota"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class),
                 rs.getObject("reajustado_em", OffsetDateTime.class));

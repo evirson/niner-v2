@@ -13,6 +13,7 @@ import com.vetor.niner.fiscal.documento.MontagemNfceDtos.ResponsavelTecnico;
 import com.vetor.niner.fiscal.motor.MotorTributario;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.ContextoFiscalEmpresa;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.ItemOperacao;
+import com.vetor.niner.fiscal.motor.MotorTributarioDtos.ItemTributado;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.OperacaoFiscal;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.RegraFiscal;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TipoDestinatario;
@@ -31,7 +32,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -162,12 +165,26 @@ public class VendaFiscalAssembler {
                     b.origemMercadoria()));
         }
 
-        TributacaoResultado calculo = motor.calcular(
+        TributacaoResultado calculoBruto = motor.calcular(
                 // ⚠️ CONTRIBUINTE muda o CFOP que o motor escolhe (revenda, nao consumo) — e e por
                 // isso que a venda saiu do modelo 65. Declarar CONSUMIDOR_FINAL aqui contradiria o
                 // indFinal=0 e o indIEDest=1 que o XML leva.
                 new OperacaoFiscal(TipoOperacao.VENDA, ufDestino, tipoDestinatario, itensOperacao),
                 new ContextoFiscalEmpresa(config.crt(), config.uf()));
+
+        // ---------- ST já retido: o bloco do ICMSSN500 (pendência 23, cStat 938) ----------
+        // ⛔ Depois do motor, não dentro dele: estes valores não são imposto DESTA venda, são o que
+        // o fornecedor reteve na compra. O motor calcula; este trecho apenas ANEXA o que já existe.
+        //
+        // ⚠️ A exigência é lida de `cfg_csosn.exige_st_retido` — a coluna existe desde a V035 e
+        // NINGUÉM a lia. Uma lista de CSOSN aqui no Java divergiria do catálogo no dia em que a
+        // Receita mudasse a regra de um código.
+        //
+        // ⛔ E o guarda só barra no MODELO 55, medido e não suposto: neste banco há 9 itens com
+        // CSOSN 500 em NFC-e **autorizadas** (a SEFAZ/PR não exige o bloco no 65) e 16 em NF-e 55
+        // **rejeitadas com cStat 938**. Exigir nos dois travaria o balcão inteiro para consertar um
+        // problema que só existe na venda a PJ.
+        TributacaoResultado calculo = comStRetido(calculoBruto, itensBrutos, modelo);
 
         // ⚠️ Rateado para fechar com o vNF (2026-08-29). Ver `ratearParaOTotalDaNota`: numa venda
         // MISTA (serviço + mercadoria) os itens são filtrados e os pagamentos não eram, e o XML
@@ -543,8 +560,10 @@ public class VendaFiscalAssembler {
     /** Em ordem de inserção (PK autoincremento) — a mesma ordem em que o PDV lançou os itens. */
     private List<ItemBruto> buscarItens(long idVenda) {
         return jdbc.sql("""
-                        SELECT pmd.qtd_produto, pmd.preco_venda, pmd.valor_desconto, pmd.valor_acrescimo,
+                        SELECT pmd.id_variacao, pmd.qtd_produto, pmd.preco_venda, pmd.valor_desconto,
+                               pmd.valor_acrescimo,
                                pb.sku, pb.ean, p.descricao, p.codigo_ncm, p.cest, p.origem_mercadoria,
+                               p.st_retido_base_unitario, p.st_retido_valor_unitario, p.st_retido_aliquota,
                                p.unidade_comercial, p.unidade_tributavel, p.id_perfil_fiscal,
                                n.alq_federal_nacional, n.alq_federal_importado, n.alq_estadual, n.alq_municipal
                           FROM produto_movimento_detalhe pmd
@@ -575,15 +594,179 @@ public class VendaFiscalAssembler {
                                 "O produto \"" + rs.getString("descricao") + "\" não tem perfil fiscal "
                                         + "configurado. Configure o perfil na tela de Produto antes de emitir.");
                     }
-                    return new ItemBruto(rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"),
+                    return new ItemBruto(rs.getLong("id_variacao"),
+                            rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"),
                             rs.getBigDecimal("valor_desconto"), rs.getBigDecimal("valor_acrescimo"),
                             rs.getString("sku"), rs.getString("ean"), rs.getString("descricao"),
                             rs.getString("codigo_ncm"), rs.getString("cest"), rs.getInt("origem_mercadoria"),
                             rs.getString("unidade_comercial"), rs.getString("unidade_tributavel"), idPerfil,
                             rs.getBigDecimal("alq_federal_nacional"), rs.getBigDecimal("alq_federal_importado"),
-                            rs.getBigDecimal("alq_estadual"), rs.getBigDecimal("alq_municipal"));
+                            rs.getBigDecimal("alq_estadual"), rs.getBigDecimal("alq_municipal"),
+                            rs.getBigDecimal("st_retido_base_unitario"),
+                            rs.getBigDecimal("st_retido_valor_unitario"),
+                            rs.getBigDecimal("st_retido_aliquota"));
                 })
                 .list();
+    }
+
+    /**
+     * Anexa o ST já retido aos itens cujo CSOSN o exige, e <b>recusa</b> quando não há de onde
+     * tirá-lo — pendência 23, {@code cStat 938}.
+     *
+     * <p>⛔ <b>Recusar aqui é o ponto</b> (decisão do dono do produto, 2026-09-02): o F11 barra
+     * <b>antes de a numeração ser reservada</b>. Sem isso o caminho é o de hoje — número queimado,
+     * XML assinado, viagem à SEFAZ e uma rejeição que diz *"Nao informada vBCSTRet, pST e
+     * vICMSSTRet"* sem dizer <b>onde</b> resolver. Número queimado vira buraco de numeração e
+     * obrigação de inutilização formal.
+     *
+     * <p>⚠️ <b>Só no modelo 55.</b> Medido neste banco: 9 itens com CSOSN 500 saíram em NFC-e
+     * <b>autorizadas</b> e 16 em NF-e 55 <b>rejeitadas com 938</b>. A SEFAZ/PR não exige o bloco no
+     * 65, e travar o balcão para consertar a venda a PJ seria trocar um defeito por um pior.
+     *
+     * <p>⭐ Quando <b>há</b> o dado, ele vai nos dois modelos: é informação correta, o 65 aceita, e
+     * manter os dois caminhos iguais evita a divergência que nasce de um `if` por modelo.
+     */
+    private TributacaoResultado comStRetido(TributacaoResultado calculo, List<ItemBruto> itensBrutos,
+                                            ModeloVenda modelo) {
+        Set<String> exigem = csosnQueExigemStRetido();
+        boolean algumExige = calculo.itens().stream()
+                .anyMatch(i -> i.icms().csosn() != null && exigem.contains(i.icms().csosn()));
+        if (!algumExige) {
+            return calculo;
+        }
+
+        Map<Long, StRetido> daEntrada = buscarStRetidoDaEntrada(itensBrutos);
+        List<ItemTributado> novos = new ArrayList<>();
+        for (ItemTributado item : calculo.itens()) {
+            String csosn = item.icms().csosn();
+            if (csosn == null || !exigem.contains(csosn)) {
+                novos.add(item);
+                continue;
+            }
+            // O nItem é 1-based e a lista de brutos está na mesma ordem — é assim que os dois lados
+            // se pareiam em todo este montador.
+            ItemBruto bruto = itensBrutos.get(item.nItem() - 1);
+            StRetido st = stRetidoDoItem(bruto, daEntrada);
+            if (st == null) {
+                if (modelo.ehNfe()) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            ("O produto \"%s\" sai com CSOSN %s (ICMS já retido por substituição), e a "
+                                    + "NF-e exige o valor do ST retido — que este produto não tem em lugar "
+                                    + "nenhum. Ele nunca entrou por XML de compra: informe o ST retido por "
+                                    + "unidade no cadastro do Produto, aba Fiscal, com o seu contador.")
+                                    .formatted(bruto.descricao(), csosn));
+                }
+                novos.add(item);
+                continue;
+            }
+            novos.add(new ItemTributado(item.nItem(), item.cfop(), item.valorProduto(), item.valorDesconto(),
+                    item.valorAcrescimo(), item.icms().comStRetido(st.base(), st.aliquota(), st.valor()),
+                    item.pis(), item.cofins(), item.ibsCbs(), item.valorTribFederal(),
+                    item.valorTribEstadual(), item.valorTribMunicipal(), item.valorTotalTributos()));
+        }
+        return new TributacaoResultado(novos, calculo.totais(), calculo.versaoMotor(), calculo.avisos());
+    }
+
+    /**
+     * Os CSOSN que exigem o bloco de ST retido, <b>lidos do catálogo</b> ({@code cfg_csosn}, V035).
+     *
+     * <p>⚠️ A coluna {@code exige_st_retido} existia desde a V035 e <b>nenhum código a lia</b> —
+     * dado declarado que ninguém consome. Uma lista fixa em Java aqui divergiria do catálogo no dia
+     * em que a regra de um código mudasse, e ninguém compararia.
+     */
+    private Set<String> csosnQueExigemStRetido() {
+        return Set.copyOf(jdbc.sql("SELECT codigo_csosn FROM cfg_csosn WHERE exige_st_retido")
+                .query(String.class).list().stream().map(String::trim).toList());
+    }
+
+    /**
+     * ST <b>já retido</b> por unidade, para o {@code ICMSSN500} (pendência 23, {@code cStat 938}).
+     *
+     * <p>⭐ <b>A fonte preferida é a ENTRADA</b> (decisão do dono do produto em 2026-09-02, depois
+     * de conferir com o contador): é o ICMS-ST que o fornecedor de fato reteve, e está no XML que
+     * ele emitiu. O cadastro do produto é a <b>reserva</b>, para a mercadoria que nunca entrou por
+     * XML — caso em que só o contador sabe o número.
+     *
+     * <p>⚠️ <b>Por unidade, e é aqui que a conta pode errar sem ninguém ver:</b>
+     * {@code entrada_nfe_item} guarda o <b>total do item</b> (o ST de 12 unidades), e a venda pode
+     * ser de 1. Dividir pela quantidade da entrada é o que torna as duas fontes comparáveis — usar
+     * o total direto declararia 12× o ST numa venda de uma peça, e a nota seria <b>autorizada</b>,
+     * porque a SEFAZ não sabe quantas unidades a compra teve.
+     *
+     * <p>⚠️ <b>A entrada mais recente, não a soma:</b> o mesmo produto entra várias vezes, com
+     * valores diferentes. Somar produziria um número que nenhuma compra teve; a média esconderia a
+     * variação. A última é a que mais se aproxima do lote que está saindo — e é o que o mercado
+     * faz. ⛔ Isso é uma <b>aproximação declarada</b>: rastrear ST por lote exigiria custo por lote,
+     * que este produto não tem.
+     *
+     * <p>{@code pST} vem do cadastro quando informado; senão é <b>derivado</b>
+     * ({@code valor / base × 100}), que é a alíquota coerente com o que foi retido de fato.
+     */
+    private Map<Long, StRetido> buscarStRetidoDaEntrada(List<ItemBruto> itens) {
+        List<Long> variacoes = itens.stream().map(ItemBruto::idVariacao).distinct().toList();
+        if (variacoes.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, StRetido> mapa = new LinkedHashMap<>();
+        jdbc.sql("""
+                        SELECT DISTINCT ON (i.id_variacao)
+                               i.id_variacao,
+                               i.base_st_retido / nullif(i.quantidade, 0) AS base_unitaria,
+                               i.icms_st_retido / nullif(i.quantidade, 0) AS valor_unitario
+                          FROM entrada_nfe_item i
+                         WHERE i.id_tenant = plataforma.tenant_atual()
+                           AND i.id_variacao = ANY (?)
+                           AND i.icms_st_retido IS NOT NULL
+                           AND i.base_st_retido IS NOT NULL
+                         ORDER BY i.id_variacao, i.id_movimento DESC, i.numero_item DESC
+                        """)
+                .param(variacoes.toArray(new Long[0]))
+                .query((rs, n) -> new Object[] {
+                        rs.getLong("id_variacao"),
+                        rs.getBigDecimal("base_unitaria"),
+                        rs.getBigDecimal("valor_unitario") })
+                .list()
+                .forEach(l -> {
+                    BigDecimal base = (BigDecimal) l[1];
+                    BigDecimal valor = (BigDecimal) l[2];
+                    if (base != null && valor != null) {
+                        mapa.put((Long) l[0], new StRetido(base, valor, null));
+                    }
+                });
+        return mapa;
+    }
+
+    /**
+     * O ST retido de um item, com a fonte já resolvida — {@code null} quando não há em lugar nenhum.
+     *
+     * <p>Os valores saem <b>multiplicados pela quantidade vendida</b>: o XML declara o ST do item
+     * da nota, não o de uma unidade.
+     */
+    private static StRetido stRetidoDoItem(ItemBruto b, Map<Long, StRetido> daEntrada) {
+        StRetido unitario = daEntrada.get(b.idVariacao());
+        if (unitario == null && b.stRetidoBaseUnitario() != null && b.stRetidoValorUnitario() != null) {
+            unitario = new StRetido(b.stRetidoBaseUnitario(), b.stRetidoValorUnitario(), b.stRetidoAliquota());
+        }
+        if (unitario == null) {
+            return null;
+        }
+        BigDecimal base = unitario.base().multiply(b.qtd()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal valor = unitario.valor().multiply(b.qtd()).setScale(2, RoundingMode.HALF_UP);
+        // pST do cadastro quando informado; senão derivado do que foi retido. Base zero (mercadoria
+        // sem retenção declarada pelo contador) não pode virar divisão por zero.
+        BigDecimal aliquota = b.stRetidoAliquota() != null
+                ? b.stRetidoAliquota()
+                : base.signum() == 0
+                        ? BigDecimal.ZERO
+                        : valor.multiply(CEM).divide(base, 2, RoundingMode.HALF_UP);
+        return new StRetido(base, valor, aliquota);
+    }
+
+    /** Fator de 100 para derivar o `pST` a partir do que foi retido. */
+    private static final BigDecimal CEM = new BigDecimal("100");
+
+    /** Base, valor e alíquota do ICMS-ST já retido — a trinca que o {@code ICMSSN500} exige. */
+    private record StRetido(BigDecimal base, BigDecimal valor, BigDecimal aliquota) {
     }
 
     /**
@@ -803,10 +986,12 @@ public class VendaFiscalAssembler {
                                Integer codigoVendedor, String nomeVendedor) {
     }
 
-    private record ItemBruto(BigDecimal qtd, BigDecimal precoVenda, BigDecimal valorDesconto,
+    private record ItemBruto(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal valorDesconto,
                              BigDecimal valorAcrescimo, String sku, String gtin, String descricao,
                              String ncm, String cest, int origemMercadoria, String unidadeComercial,
                              String unidadeTributavel, int idPerfilFiscal, BigDecimal alqFederalNacional,
-                             BigDecimal alqFederalImportado, BigDecimal alqEstadual, BigDecimal alqMunicipal) {
+                             BigDecimal alqFederalImportado, BigDecimal alqEstadual, BigDecimal alqMunicipal,
+                             BigDecimal stRetidoBaseUnitario, BigDecimal stRetidoValorUnitario,
+                             BigDecimal stRetidoAliquota) {
     }
 }

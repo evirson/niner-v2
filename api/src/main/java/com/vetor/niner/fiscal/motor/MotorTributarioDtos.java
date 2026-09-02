@@ -127,7 +127,34 @@ public final class MotorTributarioDtos {
             BigDecimal valor,
             BigDecimal percReducaoBc,
             BigDecimal aliquotaFcp,
-            BigDecimal valorFcp) {
+            BigDecimal valorFcp,
+            /**
+             * ST <b>já retido</b> — {@code vBCSTRet}, {@code pST} e {@code vICMSSTRet} do
+             * {@code ICMSSN500} (pendência 23, {@code cStat 938}).
+             *
+             * <p>⛔ <b>O motor NÃO calcula estes três, e não pode:</b> eles não são imposto desta
+             * venda — são o que o fornecedor reteve lá atrás, na compra. Vêm de
+             * {@code entrada_nfe_item} ou do cadastro do produto, e quem os preenche é o
+             * {@code VendaFiscalAssembler}, depois do cálculo. Aqui eles chegam <b>nulos</b>.
+             *
+             * <p>⚠️ Estão neste record, e não numa estrutura à parte, porque é ICMS: separá-los
+             * abriria a porta para um montador que emite o CSOSN e esquece o bloco — que é
+             * exatamente o defeito que a pendência 23 descreve.
+             */
+            BigDecimal baseStRetido,
+            BigDecimal aliquotaStRetido,
+            BigDecimal valorStRetido) {
+
+        /** Cópia com o ST retido preenchido — o record é imutável e o valor chega depois. */
+        public Icms comStRetido(BigDecimal base, BigDecimal aliquota, BigDecimal valor) {
+            return new Icms(cst, csosn, baseCalculo, this.aliquota, this.valor, percReducaoBc,
+                    aliquotaFcp, valorFcp, base, aliquota, valor);
+        }
+
+        /** {@code true} quando os três valores estão presentes — é o que o montador exige. */
+        public boolean temStRetido() {
+            return baseStRetido != null && valorStRetido != null && aliquotaStRetido != null;
+        }
     }
 
     public record Contribuicao(String cst, BigDecimal baseCalculo, BigDecimal aliquota, BigDecimal valor) {

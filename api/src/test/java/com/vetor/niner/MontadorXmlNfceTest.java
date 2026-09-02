@@ -114,14 +114,66 @@ class MontadorXmlNfceTest {
         assertThat(montado.xml()).contains("<ICMSSN102><orig>0</orig><CSOSN>" + csosn + "</CSOSN></ICMSSN102>");
     }
 
-    /** CSOSN 500 (ST retido) — muito comum em confecção e calçado. O bloco de ST retido é
-     *  `<xs:sequence minOccurs="0">` no XSD, então sai só orig+CSOSN e o schema aceita. */
+    /**
+     * CSOSN 500 (ST retido) <b>sem</b> o valor do ST — o caso da NFC-e de balcão.
+     *
+     * <p>⚠️ <b>Este teste passava defendendo um defeito</b>, e o javadoc dele dizia por quê:
+     * *"o bloco é `minOccurs=0` no XSD, então sai só orig+CSOSN e o schema aceita"*. O schema
+     * aceita mesmo — <b>a SEFAZ não</b>: `cStat 938 — "Nao informada vBCSTRet, pST e vICMSSTRet"`,
+     * medido duas vezes no PR (pendência 23). Era o exemplo mais puro de
+     * [[feedback_xsd_nao_e_o_contrato_da_sefaz]].
+     *
+     * <p>⭐ <b>Invertido, não apagado:</b> o comportamento continua correto <b>para o modelo 65</b>,
+     * e isso foi medido neste banco — 9 itens com CSOSN 500 em NFC-e autorizadas contra 16 em NF-e
+     * 55 rejeitadas. Quem barra a nota 55 sem o dado é o `VendaFiscalAssembler`, antes de reservar
+     * número; o montador escreve o que recebe.
+     */
     @Test
-    void csosn500DeStRetidoEhValidoSemOsCamposDeStQueOMotorNaoCalcula() {
+    void csosn500SemStRetidoSaiSoComOrigECsosn_queEhOQueAsefazAceitaNoModelo65() {
         XmlMontado montado = montarVendaSimples(1, "500", null);
 
         validarEstrutura(montado);
         assertThat(montado.xml()).contains("<ICMSSN500><orig>0</orig><CSOSN>500</CSOSN></ICMSSN500>");
+    }
+
+    /**
+     * ⛔ <b>CSOSN 500 COM o ST retido — o que a NF-e 55 exige</b> (pendência 23).
+     *
+     * <p>Os três valores não são imposto desta venda: são o que o fornecedor reteve na compra. Quem
+     * os resolve é o assembler (entrada por XML, cadastro do produto como reserva); aqui se prova
+     * que, recebendo-os, o montador escreve o bloco <b>na ordem que o XSD exige</b> — `vBCSTRet`,
+     * `pST`, `vICMSSTRet`, com o `vICMSSubstituto` opcional pulado. Trocar a ordem passa em qualquer
+     * asserção de texto e é rejeição garantida na transmissão.
+     */
+    @Test
+    void csosn500ComStRetidoEscreveOBlocoNaOrdemDoXsd() {
+        RegraFiscal regra = regraSimples("500");
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null, null, null);
+        TributacaoResultado calculo = motor.calcular(
+                new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
+                new ContextoFiscalEmpresa(1, "PR"));
+
+        // O que o assembler faz depois do motor: anexa o ST retido ao item.
+        ItemTributado original = calculo.itens().get(0);
+        ItemTributado comSt = new ItemTributado(original.nItem(), original.cfop(), original.valorProduto(),
+                original.valorDesconto(), original.valorAcrescimo(),
+                original.icms().comStRetido(um("36.00"), um("18.00"), um("6.48")),
+                original.pis(), original.cofins(), original.ibsCbs(), original.valorTribFederal(),
+                original.valorTribEstadual(), original.valorTribMunicipal(), original.valorTotalTributos());
+
+        ItemNota item = new ItemNota(1, "P1", null, "PRODUTO COM ST RETIDO", "61091000", null,
+                "UN", um("3"), um("10.00"), null, null, null, 0);
+        XmlMontado montado = montador.montar(new NotaParaMontar(
+                AmbienteSefaz.HOMOLOGACAO, ModeloVenda.NFCE, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+                emitente(1), null, List.of(item), List.of(comSt), calculo.totais(),
+                List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)),
+                null, null, respTec(), urls(), csc(), "Niner 1.0"));
+
+        assertThatCode(() -> validarEstrutura(montado)).doesNotThrowAnyException();
+        assertThat(montado.xml())
+                .as("a ordem é do XSD: vBCSTRet, pST, vICMSSTRet")
+                .contains("<ICMSSN500><orig>0</orig><CSOSN>500</CSOSN>"
+                        + "<vBCSTRet>36.00</vBCSTRet><pST>18.0000</pST><vICMSSTRet>6.48</vICMSSTRet></ICMSSN500>");
     }
 
     /**
