@@ -181,7 +181,11 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 
 ## 🔴 Aberto em 2026-08-31 (fechamento) — o que precisa de VOCÊ
 
-### 75. 🔵 A NFC-e não emite: o CSC de homologação gravado não é o credenciado
+### 75. ✅ A NFC-e VOLTOU A EMITIR — **FECHADO em 2026-09-01** (ele redigitou o CSC)
+
+> **Reconferido no banco em 2026-09-02:** NFC-e **62** (01/09, 12:13) e **63** (01/09, 15:16)
+> autorizadas, mais a NF-e 55 nº 31. O texto abaixo é o diagnóstico de quando bloqueava.
+
 **Bloqueia a emissão hoje.** A venda 628 (e as 6 anteriores desde 24/08) voltou com
 `cStat 464 — "Código de Hash no QR-Code difere do calculado"`.
 
@@ -244,7 +248,11 @@ Teste: `vendaAntigaEmiteComADataDeHojeNaoComADaVenda`, que envelhece a venda em 
 é da NFC-e) — a correção serve aos dois porque `now()` é sempre válido, mas não medi o limite do
 modelo 55.
 
-### 77. 🔵 NFS-e ainda não tem linha de configuração
+### 77. ✅ NFS-e configurada — **FECHADO** (medido em 2026-09-02)
+
+> A tabela de configuração da NFS-e tem **1 linha** para a empresa 1: ambiente HOMOLOGACAO,
+> emissão **ligada**. Ele configurou em 01/09. O texto abaixo é o estado antigo.
+
 `fiscal_config_nfse` está vazia para a empresa 1. O default do sistema é **HOMOLOGACAO** (produção
 restrita do Sefin Nacional), então não há risco de emitir em produção por engano — mas enquanto não
 houver configuração, `emite_nfse` é `false` e nada sai.
@@ -649,7 +657,12 @@ decisão dele.
 (`Integer` × `Long`) — a compilação incremental não refez a classe. Só apareceu apagando
 `target/classes/.../documento`. É [[feedback_mvn_compile_incremental_falso_positivo]] de novo.
 
-### 72. 🟡 O motor da NFS-e ganhou chamador — **falta só o PDV** (medido em 2026-08-31, depois do pull)
+### 72. ✅ O PDV emite a NFS-e — **FECHADO em 2026-09-01** (item 78)
+
+> **Reconferido no código em 2026-09-02:** o serviço fiscal da venda tem a segunda perna
+> (emitirServicos → emitirDaVenda), então a venda com serviço emite NFS-e junto com a NFC-e das
+> mercadorias. O texto abaixo é o diagnóstico de quando o motor estava desligado.
+
 Quando abri este item, `grep` por `Nfse` fora do pacote devolvia **zero**: montagem, assinatura,
 transporte, numeração, emissão e cancelamento prontos e **nenhuma venda emitindo** — o padrão
 *"mecanismo pronto e desligado nas duas pontas"*.
@@ -1549,7 +1562,13 @@ já considerava livre.
 
 ---
 
-### 56. Lacunas menores da OS (nenhuma bloqueia a operação) 🟢
+### 56. ✅ Lacunas menores da OS — **FECHADO** (revisado em 2026-09-02)
+
+> Os três pontos do item terminaram resolvidos: Exportação de Dados inclui as OS (29/08),
+> o Relatório de OS foi feito e conferido no navegador (31/08), e "campos não configuráveis por
+> tenant" **não é lacuna** — o orçamento também não tem, é o padrão de tela de *documento*.
+> Fica como registro do que foi verificado.
+
 
 Levantadas conferindo o código em 2026-08-28, depois de fechar o item 53:
 - ✅ **Exportação de Dados já inclui as OS** (2026-08-29) — décima tabela, **uma linha por ITEM**,
@@ -1705,7 +1724,12 @@ sumiu **e** acusando o rodapé desatualizado.
 
 <details><summary>Texto original do item</summary>
 
-### 79. 🟢 `docs/TELAS.md` diverge de si mesmo e do banco na contagem de telas
+### 79. ✅ Contagem de telas DERIVADA do código — **FECHADO em 2026-09-01**
+
+> O script de auditoria imprime as três bases e lista as diferenças item a item, e o
+> ContagemDeTelasConfereTest (conferido presente em 2026-09-02) reprova o build quando o
+> catálogo diverge do código ou de si mesmo. O texto abaixo é o diagnóstico original.
+
 Achado ao reauditar a documentação em 2026-08-31 (segunda passada, a pedido dele).
 
 Três números para a mesma coisa, medidos no mesmo dia:
