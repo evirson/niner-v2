@@ -506,3 +506,39 @@ Funcionário).
 marcar como zero."* Quem quer o campo **fora do cadastro** usa `cfg_tela_campo.visivel = false`, que
 é a dimensão certa para isso — a tabela tem as duas, com CHECK garantindo que obrigatório implica
 visível.
+
+
+---
+
+## ⛔ 2026-09-02 — ICMS-ST já retido (CSOSN 500): três campos que decidem se a NF-e sai
+
+**Por que existe.** Mercadoria comprada com ICMS-ST já retido pelo fornecedor sai com **CSOSN 500**
+no Simples. No **modelo 55** a SEFAZ exige, junto do código, o que foi retido lá atrás —
+`vBCSTRet`, `pST`, `vICMSSTRet` — e rejeita com `cStat 938` quando falta. Não é hipótese: foram
+duas rejeições reais desta loja, em 24/08 e 27/08.
+
+**Onde ficam.** Seção **Fiscal** do formulário, logo abaixo do Perfil Fiscal, e **só para
+mercadoria** (ST retido é ICMS; serviço é ISS, e o servidor recusa nomeando o campo).
+
+| Campo | O que é |
+|---|---|
+| Base do ST por unidade | `vBCSTRet` de **uma** unidade |
+| ICMS-ST por unidade | `vICMSSTRet` de **uma** unidade |
+| Alíquota do ST (%) | `pST`. Em branco, é **derivada** (valor ÷ base × 100) |
+
+⭐ **São a RESERVA, e a tela diz isso.** A fonte preferida é a **entrada por XML** daquele produto —
+é o ICMS-ST que o fornecedor de fato reteve, e está em `entrada_nfe_item`. Estes campos valem para
+a mercadoria que **nunca entrou por XML**, caso em que só o contador sabe o número. Decisão do dono
+do produto em 2026-09-02, conferida com o contador dele.
+
+⚠️ **Por unidade, e não por nota.** A entrada guarda o total do item (o ST de 12 unidades) e a venda
+pode ser de 1. Usar o total direto declararia 12× o ST numa venda de uma peça — e a nota seria
+**autorizada**, porque a SEFAZ não sabe quantas unidades a compra teve.
+
+⚠️ **Em branco ≠ zero.** Em branco é *"ninguém informou"*, e a NF-e 55 é **recusada antes de
+reservar número**, com a mensagem nomeando o produto e mandando preencher aqui. Zero é *"o contador
+conferiu e não há retenção"*, e a nota sai com 0,00. O banco tem CHECK garantindo que **base e
+valor andem juntos**, e a tela avisa antes de deixar salvar pela metade.
+
+⛔ **A NFC-e 65 não é afetada** — medido: 9 itens com CSOSN 500 saíram em NFC-e **autorizadas**
+contra 16 em NF-e 55 rejeitadas. O balcão continua vendendo sem estes campos.

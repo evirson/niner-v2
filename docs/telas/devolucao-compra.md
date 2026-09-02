@@ -245,3 +245,23 @@ mais fornecedores parecidos que o limite concluía "não está cadastrado" quand
 Limite subiu para **20** e a tela avisa *"Mostrando os primeiros 20 — refine a busca para ver
 mais."*. ⚠️ Aqui o risco é maior que numa busca comum: escolher o fornecedor errado numa devolução
 significa **emitir NF-e 55 contra o destinatário errado**.
+
+---
+
+## ⛔ 2026-09-02 — a NF-e de devolução ao fornecedor também declarava o valor BRUTO
+
+Achado ao corrigir a pendência 60 na devolução de **venda**: a ponta vizinha tinha o mesmo defeito,
+e é o padrão mais comum deste projeto — corrigir um lado e não varrer o outro.
+
+`DevolucaoCompraFiscalAssembler` não lia `entrada_nfe_item.valor_desconto` — coluna preenchida de
+verdade, a partir do `vDesc` do XML do **próprio fornecedor** (conferido no INSERT de
+`EntradaMercadoriaService`) — e `somar()` fixava `vDesc = ZERO`. A nota de saída declarava o valor
+de tabela de uma compra que custou menos.
+
+**Como ficou:** o desconto é espelhado por item, rateado pela quantidade devolvida, e o total é
+**`produtos − desconto + ST`** (o imposto retido continua compondo o total, pelo mesmo motivo de
+sempre: ele compôs o da nota de entrada).
+
+⛔ **Declarado, e é o limite desta correção:** não existe caso ponta a ponta com desconto do
+fornecedor. O montador é o mesmo da devolução de venda e está coberto contra o **XSD oficial**, mas
+nenhum teste monta a NF-e de saída a partir de uma entrada com `vDesc`.

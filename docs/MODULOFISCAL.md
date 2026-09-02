@@ -2218,12 +2218,23 @@ servidor, certificado e internet. Ver `docs/telas/pdv.md` (revisão 2026-08-24).
 
 ### ⏭️ Continua faltando
 
-- 🔴 **O `cStat 974`** — **chamado aberto na SEFAZ/PR em 2026-08-25**; aguardando resposta. Todas as
-  hipóteses do nosso lado foram medidas e descartadas (ver a tabela acima). **Nenhuma NF-e 55 foi
-  autorizada ainda.**
-- **SVC** (contingência da 55).
-- **CSOSN 500 com ST retido**: `vBCSTRet`/`pST`/`vICMSSTRet` no modelo 55 (`cStat 938`). Depende de
-  dado da compra e de decisão do contador.
+> ⚠️ **Esta lista estava MENTINDO até 2026-09-02**, e nos dois primeiros itens. Ela dizia
+> *"nenhuma NF-e 55 foi autorizada ainda"* — medido no banco naquele dia: **8 NF-e 55 autorizadas**,
+> a última a de nº 31, em 01/09. Lista de pendência que ninguém reconfere vira afirmação falsa com
+> cara de fato, e esta descrevia o módulo como travado quando ele já emitia.
+
+- ✅ **O `cStat 974` caiu em 2026-08-29** — a NF-e 55 autoriza (8 delas, a última nº 31 em 01/09).
+  O chamado na SEFAZ/PR deixou de ser bloqueio.
+- ✅ **CSOSN 500 com ST retido — RESOLVIDO em 2026-09-02** (V110, pendência 23). O
+  `vBCSTRet`/`pST`/`vICMSSTRet` sai no `ICMSSN500`, com o valor vindo da **entrada por XML** do
+  produto (cadastro como reserva) e a NF-e 55 **recusada antes de reservar número** quando o dado
+  não existe. ⛔ Só barra no modelo 55: medido, a NFC-e 65 autoriza sem o bloco (9 itens contra 16
+  rejeições no 55). ⚠️ O que falta é **transmitir** uma 55 com o bloco e conferir o `cStat` — o XSD
+  já está conferido na suíte.
+- **SVC** (contingência da 55) — item 22, decisão de produto registrada.
+- 🔵 **Homologação fora do PR: adiada** por decisão dele (2026-09-02) até o ERP ficar pronto. Não
+  mexe no que está carregado (as 27 UFs continuam em `cfg_uf_autorizador`); o adiado é transmitir
+  e conferir o `cStat` nas outras UFs.
 
 ---
 

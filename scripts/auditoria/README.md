@@ -13,11 +13,23 @@ node scripts/auditoria/contrato-ts-java.js
 
 ## `classes-css-orfas.js` — classe CSS que não existe
 
-Compara as classes usadas em `web/src/**/*.tsx` com as declaradas em `web/src/**/*.css`.
+Compara as classes usadas em `src/**/*.tsx` com as declaradas em `src/**/*.css` — **nos dois
+fronts** (`web` e `admin`) desde 2026-09-02; passe `web` ou `admin` para rodar só um.
 **Classe inexistente não dá erro em lugar nenhum** — o elemento só perde o estilo, e o PDF dos
 relatórios é captura visual, então o arquivo do contador sai igual ao defeito. Já achou os KPIs
 empilhados do Relatório de Contas a Pagar, o seletor Mensal/Anual idêntico nos dois estados da
 Minha Conta e a NF-e rejeitada saindo com a mesma cor da autorizada.
+
+⚠️ **Dois falsos positivos foram removidos em 2026-09-02**, e os dois enganavam: (a) **comentário
+que CITA** uma classe inexistente para explicar que ela não existe, e (b) o literal do **lado
+esquerdo** de um ternário (`aba === 'MERCADORIA' ? 'aba ativa' : 'aba'` tem três strings e só duas
+são classe). Eram 15 achados no `web`, viraram **4** — e os 4 estão explicados. ⭐ Guarda que acusa
+falso treina quem lê a falha a ignorá-lo.
+
+⛔ **Órfã listada não é veredito.** Confira se a classe é declarada em **CSS injetado em runtime**
+(é o caso de `orcamento-imprimir-bobina` e `os-imprimir-*`, que carregam o `@page` nomeado) ou se é
+uma **base semântica** cujos modificadores existem (`dre-linha` + `dre-linha-grupo`). E ele **não
+reprova o build**: é relatório, não guarda.
 
 ⚠️ **O que ele NÃO pega, e por quê:**
 - Classes montadas por interpolação (`` className={`uso-${x}`} ``) — ele **lista** essas ocorrências

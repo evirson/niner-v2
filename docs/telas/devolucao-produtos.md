@@ -208,10 +208,15 @@ ainda sem resposta") e o item **B9** do roteiro fiscal (NF-e de devolução), qu
 > **DANFE A4**. O teste contra a SEFAZ-PR de homologação foi feito e **derrubou duas premissas**
 > (ver "O que a SEFAZ recusou", abaixo).
 >
-> ⏭️ **Pendência que não é código:** a SEFAZ responde `cStat 974` ("CNPJ do responsavel tecnico
-> diverge do cadastrado") — a **MITRYUSCASH precisa se cadastrar como responsável técnico no portal da
-> SEFAZ de cada UF e obter o CSRT**. Até lá nenhuma NF-e 55 autoriza de verdade; a devolução e o
-> vale funcionam normalmente (F3), e a NFC-e do dia a dia não é afetada.
+> ✅ **O `cStat 974` caiu em 2026-08-29** — a MITRYUSCASH se cadastrou como responsável técnico e
+> obteve o CSRT, e a NF-e 55 autoriza (medido em 2026-09-02: **8 autorizadas**, a última nº 31).
+> ⚠️ O parágrafo abaixo é o estado ANTIGO, mantido porque explica de onde veio o desenho do CSRT
+> por UF:
+>
+> > ⏭️ *Pendência que não é código:* a SEFAZ responde `cStat 974` ("CNPJ do responsavel tecnico
+> > diverge do cadastrado") — a MITRYUSCASH precisa se cadastrar como responsável técnico no portal
+> > da SEFAZ de cada UF e obter o CSRT. Até lá nenhuma NF-e 55 autoriza de verdade; a devolução e o
+> > vale funcionam normalmente (F3), e a NFC-e do dia a dia não é afetada.
 >
 > **Onde o código é cadastrado (2026-08-20):** backoffice → **CSRT por UF** (`/csrt`), uma linha por
 > UF × ambiente — o CSRT é emitido pela SEFAZ de **cada** estado, então deixou de caber numa variável
@@ -610,6 +615,32 @@ distinto vira uma linha da grid. No caso comum — um preço só — a tela sai 
   origem não tem linha para apontar, e integrações existentes continuam válidas. Quando vem, o
   servidor **confere que a venda teve mesmo aquela linha** — sem isso, quem chamasse a API
   escolheria o valor do próprio vale.
+
+### A NF-e 55 de devolução saiu do BRUTO (2026-09-02, pendência 60)
+
+Até esta data o assembler não lia `documento_fiscal_item.valor_desconto` e `somar()` fixava
+`vDesc = ZERO`, com `vNF` = soma dos `vProd`. Devolver uma venda de **R$ 30,00 com R$ 5,00 de
+desconto** emitia nota de entrada de **R$ 30,00** referenciando, **no mesmo XML**, uma NFC-e cujo
+`vNF` é **R$ 25,00**.
+
+⚠️ **Não era regressão de 29/08** — é anterior. O que mudou naquele dia foi que todo o resto (vale,
+DRE, Lucratividade, Comissões, cancelamento) passou a trabalhar no líquido, e a nota fiscal ficou
+sendo o **único lugar no bruto**.
+
+**Como ficou:** o desconto é espelhado no item (rateado pela quantidade devolvida, pela mesma
+máquina de rateio dos outros valores), somado no total, e `vNF = vProd − vDesc`.
+
+⚠️ **O `vProd` continua bruto, de propósito:** é ele que o item vendeu, e é por ele que a linha de
+devolução casa com a linha da venda. Quem carrega o desconto é o `vDesc` — a mesma decisão que a
+gravação do ledger já tomava.
+
+⭐ **A devolução ao FORNECEDOR tinha o mesmo defeito** e foi corrigida junto: lá o desconto vem do
+`vDesc` do XML do fornecedor (`entrada_nfe_item.valor_desconto`), e o total é
+`produtos − desconto + ST`.
+
+⛔ **Declarado:** nada foi transmitido à SEFAZ. A prova é o **XSD oficial** dentro da suíte (o mesmo
+`ValidadorXsd` que a emissão roda no F11) mais um teste ponta a ponta que afirma sobre o
+`xml_assinado` — sabotado, ele falha mostrando `<vDesc>0.00</vDesc>` e `<vNF>30.00</vNF>`.
 - **O saldo é por linha**: devolver a peça de R$ 50 não consome o disponível da de R$ 120.
 - **A chave da grade** virou `idVariacao|preço` (`chaveLinha`), no front e no back. Mesma lição do
   `ItemLedger.idLinha` do PDV: o SKU deixou de servir como chave quando duas linhas do mesmo

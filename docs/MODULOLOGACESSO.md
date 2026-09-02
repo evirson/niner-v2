@@ -181,7 +181,7 @@ de **todos** os tenants seria pior.
 | 3 | **Dado** um e-mail que não existe, **quando** tenta entrar, **então** grava `CREDENCIAL_INVALIDA` — igual ao caso anterior, sem distinguir |
 | 4 | **Dado** o log indisponível (tabela inacessível), **quando** o usuário faz login, **então** ele **entra normalmente** |
 | 5 | **Dado** um token de tenant, **quando** chama `/api/admin/acessos`, **então** recebe 401 |
-| 6 | **Dado** um staff de qualquer papel, **quando** abre a tela, **então** lê os acessos, com filtros |
+| 6 | **Dado** um staff de qualquer papel, **quando** abre a tela **e clica em "Localizar dados"**, **então** lê os acessos, com filtros |
 | 7 | **Dado** um registro mais velho que a retenção, **quando** o expurgo roda, **então** ele é apagado |
 
 ---
@@ -192,3 +192,42 @@ de **todos** os tenants seria pior.
   resto, em vez de adivinhar. O bruto está guardado para reprocessar.
 - **Não há tela para o lojista** — e, se um dia a LGPD exigir que o controlador (o lojista) atenda
   um funcionário dele, isso volta como decisão de produto.
+
+
+---
+
+## 9. A tela, depois de ABERTA pela primeira vez (2026-09-02)
+
+⚠️⚠️ **Ela nunca tinha funcionado — e os 7 testes passavam.**
+`(Long) rs.getObject("id_tenant")` sobre uma coluna `smallint`: o driver devolve `Integer` e o cast
+estourava com `ClassCastException` em **toda linha de login bem-sucedido**, ou seja, a tela inteira.
+A resposta chegava ao navegador como **403 com corpo vazio**, que parece falta de permissão e manda
+o diagnóstico para o lado errado.
+
+⭐ **Por que os testes não viam:** o único registro que eles liam vinha de uma falha de credencial
+**sem slug**, que grava `id_tenant` **nulo** — e `(Long) null` não estoura. O caso normal (login que
+deu certo) nunca era lido. O par novo (`acessoBemSucedidoAparecePeloEndpointComContaEtenant`) foi
+**sabotado** para provar que pega. Correção: `getLong` + `wasNull` — `getLong` sozinho devolveria
+**0** para NULL, um tenant que não existe exibido como se existisse.
+
+### 🔵 A busca acontece no botão, não ao abrir
+
+Decisão dele ao ver a tela: *"não tem dados nenhum, e precisamos de um botão localizar dados, pra
+quando clicar, aí sim puxa os dados"*.
+
+A tela **não consulta nada ao abrir**. Antes ela varria a maior tabela do plano de controle — que
+cresce a cada login de cada lojista — ao abrir **e a cada tecla digitada no campo de e-mail**,
+jogando fora o resultado no caractere seguinte.
+
+⚠️ **Três estados, três mensagens**, porque *"não pedi nada"* não é *"não achei nada"*:
+"escolha os filtros e clique em **Localizar dados**", "carregando…" e "nenhum acesso com esses
+filtros". A paginação some enquanto nada foi localizado; trocar de página **não** exige o botão de
+novo (é navegação no resultado que já existe).
+
+### ⚠️ O backoffice tem vocabulário CSS próprio
+
+A tela usava `badge badge-sucesso` e `btn ghost` — do **ERP**, que não existem em
+`admin/src/styles.css` (lá é `tag`/`tag-ok`/`tag-perigo` e `btn-secundario`): selos e botões de
+paginação saíam sem estilo. No mesmo arquivo, o `<>` do `.map` estava **sem `key`** e o rótulo
+"Resultado" saía **ao lado** do `select` por faltar a classe `campo` — os outros três filtros só
+*pareciam* certos porque `input` é `width: 100%`.

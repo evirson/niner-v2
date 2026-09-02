@@ -717,3 +717,31 @@ por boa.
 **desligada**, a coluna mostrava `2,000` enquanto todo o resto do PDV mostra `2`, o operador
 conseguia digitar `1,5`, e a recusa só vinha do **servidor**, no fechamento da venda, com o cliente
 na frente.
+
+
+---
+
+## ⭐ 2026-09-02 — venda que ficou SEM nota agora emite pela tela (pendência 84)
+
+**O buraco.** Os dois gatilhos de emissão do PDV exigem `!reimpressao` — a pergunta automática do
+CPF e o botão manual. Reabrindo a papeleta pela **Pesquisa de Vendas**, nenhum aparecia, e
+Documentos Fiscais não tem ação de emitir. Resultado: **venda efetivada cujo popup foi fechado
+antes de emitir ficava sem documento e sem caminho pela tela**. Aconteceu de verdade com a venda
+641.
+
+**Como ficou.** Na papeleta reaberta, quando a venda **não tem** documento fiscal, aparece uma tarja
+— *"Esta venda não tem nota fiscal emitida"* — e o botão **Emitir Nota Fiscal**, que abre a **mesma**
+confirmação de CPF do fluxo normal (com observações da nota e a escolha do modelo).
+
+⛔ **Isto não é reemitir**, e a regra *"reimpressão nunca reemite documento fiscal"* continua
+inteira: a condição é `!dadosFiscais`. Venda **com** nota viva não mostra nada — conferido na tela
+com a venda 638, que reabre como "Reimpressão de Nota Fiscal — NFC-e", sem tarja e sem botão — e o
+servidor recusa nomeando o número da nota existente.
+
+⚠️ **Guarda novo no servidor:** `exigirVendaNaoCancelada`. Até aqui o único caminho até a emissão
+era o PDV logo depois de efetivar, onde a venda não pode estar cancelada; abrir a papeleta antiga
+criou um caminho para uma venda de qualquer data, e **esconder o botão nunca foi proteção** (P4).
+Emitir ali declararia à SEFAZ uma operação que foi desfeita.
+
+✅ **Medido na tela:** a venda 648, que é **só de serviço**, oferece corretamente **NFS-e** — não
+NFC-e.

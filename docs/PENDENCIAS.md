@@ -11,64 +11,55 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-09-02.** Estado medido: **1202 testes verdes, 0 falhas** · migrations
-> até **V109** · `tsc -b` limpo nos dois fronts · **10 telas abertas no navegador**.
+> **Última revisão: 2026-09-02 (fechamento do dia).** Estado medido: **1207 testes verdes, 0
+> falhas** · migrations até **V110** · `tsc -b` limpo nos dois fronts · build OK · **10 telas
+> abertas no navegador**.
 >
-> ⚠️⚠️ **A tela `/acessos` NUNCA tinha funcionado — e os 7 testes dela passavam** (item **85**).
-> `(Long) rs.getObject("id_tenant")` sobre uma coluna `smallint`: `ClassCastException` em **toda
-> linha de login bem-sucedido**, ou seja, a tela inteira. O único registro que os testes liam vinha
-> de uma falha de credencial **sem slug**, que grava `id_tenant` nulo — e `(Long) null` não estoura.
-> ⭐ É a família de [[feedback_abrir_a_tela_acha_o_que_a_suite_nao_ve]] no seu formato mais puro: o
-> teste existia, era bom, e media o caso que não quebrava. Hoje há o par (`acessoBemSucedido…`),
-> provado por sabotagem.
+> ## 📋 O QUE ESTÁ ABERTO, agrupado por dono (para ler primeiro)
 >
-> ⭐ **A busca da tela agora é sob demanda** (pedido dele em 2026-09-02: *"precisamos de um botão
-> localizar dados, pra quando clicar, aí sim puxa os dados"*). Antes ela consultava a maior tabela
-> do plano de controle **ao abrir e a cada tecla digitada no e-mail**.
+> ### 🔴 Trava alguma coisa
+> **#82** — a NFS-e para no `E0116` em homologação, e a saída é emitir em **produção**. ⏳ Ele
+> confirmou em 02/09 que **ainda não emitiu**; pediu para deixar registrado.
 >
-> ⭐ **E a mesma varredura achou três defeitos de CSS que nada acusa** — `tsc -b`, suíte e build
-> passam limpos: as abas de **Documentos Fiscais** usavam `abas`/`aba`/`ativa`, **três classes
-> inexistentes** (saíam dois retângulos cinza, sem marcar a selecionada); a tela de **Acessos**
-> usava `badge`/`ghost`, que são do ERP e não existem no backoffice; e `.tarja-aviso` é **flex**,
-> então todo aviso com `<strong>` no meio saía **repartido em colunas** (dois casos).
+> ### 🔵 Bola dele — decisões de produto (todas mantidas a pedido dele em 02/09)
+> **#28** planos pagos · **#11** cobrança desligada · **#22** SVC da NF-e 55 · **#83** grupo "obra"
+> da NFS-e · **#80** IP fixo do backoffice · **#49** credenciais para homologar NFS-e · **#13**
+> Painel listado como tela futura · **#12** os 13 popups sem ✕ · **#26** itens adiados de 21/08.
 >
-> ⭐ **Entrou o log de acesso ao ERP** (V109, `docs/MODULOLOGACESSO.md`): estudo, decisões dele e
-> implementação completa — banco, backend, tela no backoffice e 7 testes. As pendências novas são a
-> **85** (a tela não foi aberta no navegador), a **86** (IP errado ainda em dois pontos antigos) e a
-> **87** (arquivo de build versionado).
+> ### 🔵 Bola dele — regras de dinheiro a decidir
+> **#14** devolução não estorna comissão nem taxa · **#69** devolução não estorna o acréscimo ·
+> **#66** inutilização não filtra ano · **#70** um lead por conta · **#47** consentimento do lead ·
+> **#17** estorno não revoga assinatura · **#33** RBAC de telas que compartilham controller ·
+> **#54** o que a OS deixou para depois.
 >
-> 🔴→✅ **O que travava a operação CAIU:** ele redigitou o CSC e a **NFC-e voltou a emitir** (#75),
-> confirmado por mim de ponta a ponta (venda 638 → nota 62 autorizada). E o **#76 fechou por
-> medição**: as 96 notas do banco são todas de homologação, a produção nasce no número 1 (V106) e
-> não há faixa a inutilizar.
+> ### 🖨️ Só se prova imprimindo — dele, e eu não fecho sozinho
+> **#6** relatório no papel · **#7** PDF com gráfico · **#8** paginação A4 · **#9** etiqueta 34×60 ·
+> **#10** papel do driver por rolo · **#65** papeleta/comprovante cortando.
 >
-> ⛔ **Dois defeitos graves apareceram ao testar, e os dois estavam invisíveis para a suíte:**
-> a tela de **NFS-e nunca conseguiu salvar** (o `@RequestBody` era o DTO de leitura, com três
-> componentes primitivos → *"Failed to read request"*), e o **`dhEmi` levava a hora da venda**
-> (`cStat 704`, item **81**) — este quebraria o go-live de toda loja que emite depois da venda.
-> Os dois corrigidos e provados: o segundo **contra a SEFAZ**, com uma venda de 3 h atrás
-> autorizando.
+> ### 🟢 Bola minha — sobrou UMA
+> **#68**, e ela **encolheu**: ele decidiu homologar **só no Paraná** enquanto o ERP não fica pronto,
+> então as 26 UFs saíram da lista. Restam: conferências **no papel**, **cripto e XSD executados**, o
+> `<ano>` da inutilização e as classes CSS montadas por **interpolação** (116 linhas que o script
+> não alcança).
 >
-> ⛔ **E um defeito meu, do dia anterior:** gravei o `infCpl` e liguei a leitura **só no DANFE A4**;
-> o cupom da NFC-e continuava remontando o texto no React, e a observação do operador não saía no
-> papel. Corrigir uma ponta e não varrer as outras, no dia seguinte à lição.
+> ---
 >
-> **Ele mandou fazer a lista 🟢 inteira**, e depois trouxe uma tarefa própria (dois PDFs de DANFE).
-> Fecharam: **#40** (teto no login do backoffice + o oráculo de tempo, V107), **#79** (contagem de
-> telas derivada — e faltavam **três telas** no inventário), **#78** (o PDV emite NFS-e, e a venda
-> **só de serviço** deixou de responder 409), **#71** (número queimado deixa rastro, nos **três**
-> pontos — o item apontava só um). Mais: as **duas primeiras corridas de concorrência** do projeto,
-> a auditoria de `configuracao/importacao/`, o contrato TS↔Java refeito por endpoint e um guarda
-> para a ajuda de tela.
+> ## O que fechou em 2026-09-02
 >
-> ⭐ **O que a auditoria DESCARTOU vale tanto quanto o que achou:** zero divergências no contrato
-> TS↔Java (189 chamadas), zero ajuda órfã, e o módulo de importação está correto — os cinco `SELECT`
-> que meu `grep` acusou têm `tenant_atual()` na linha seguinte. ⚠️ Foram **cinco falsos positivos
-> meus** até esses zeros; guarda que acusa falso treina quem lê a falha a desconfiar dele.
+> **#85** (a tela `/acessos` **nunca tinha funcionado**, com 7 testes verdes — cast de `smallint`
+> para `Long`; mais o botão "Localizar dados" que ele pediu) · **#84** (venda sem nota emite pela
+> tela, com guarda contra venda cancelada) · **#86** (era **um** ponto, não dois, mais um guarda
+> estático de `getRemoteAddr`) · **#87** (`*.tsbuildinfo` ignorado) · **#29** (já estava pronta,
+> conferida na tela) · **#60** (a NF-e 55 de devolução declarava o **valor bruto**, nas duas pontas)
+> · **#23** (CSOSN 500 sem o ST retido — o `cStat 938` caiu, V110).
 >
-> ⛔ **E o defeito mais caro do dia foi meu, na tarefa dele:** gravei o `infCpl` no XML e **não
-> liguei a leitura**. Ele reportou três coisas que eram **uma só** — medido no banco, os três dados
-> estavam no XML o tempo todo. Ver `docs/PROGRESSO.md`, 2026-09-01 (2).
+> E **cinco itens estavam fechados com o título desatualizado** (#75, #77, #79, #72, #56),
+> reconferidos um a um no banco e no código antes de marcar. ⚠️ Título desatualizado num arquivo de
+> pendências custa caro: quem lê acha que está aberto e refaz, ou desconfia da lista inteira.
+>
+> ⛔ **O limite que atravessa o dia inteiro: NADA foi transmitido à SEFAZ.** As duas correções
+> fiscais (#60 e #23) estão provadas contra o **XSD oficial** dentro da suíte e conferidas no banco;
+> o `cStat` de uma emissão real com os blocos novos vem na próxima nota que ele emitir.
 >
 > **Revisão anterior: 2026-08-31 (fechamento do dia).** Estado medido: **1168 testes verdes, 0 falhas**
 > · migrations até **V106** · **60 telas** em `cfg_tela` · `tsc -b` limpo · build do front OK.
