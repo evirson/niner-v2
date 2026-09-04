@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Dark Reader (2026-09-04): o ERP já tem tema claro/escuro próprio, com seletor na topbar.
+         Sem esta tag a extensão repinta a página inteira por cima — medido na máquina do dono do
+         produto: com o seletor em "claro" e os tokens corretos (`--ground: #d8e9f0`), o `<body>`
+         pintava `rgb(23,49,60)`, vindo de 9 folhas `<style class="darkreader…">` que ela injeta.
+         Remover essas folhas em runtime não adianta: medido, ela reinjeta 8 em segundos.
+         `darkreader-lock` é o mecanismo oficial para a página dizer "eu me temo sozinha".
+         ⚠️ Ela também contaminava o PDF dos relatórios (fundo `#18191b`, o
+         `--darkreader-neutral-background` dela). A limpeza em `paletaDeImpressaoParaCaptura.ts`
+         continua existindo de propósito: esta tag depende de a extensão estar atualizada e de
+         nenhuma outra fazer o mesmo, e relatório que sai da máquina não pode depender disso. -->
+    <meta name="darkreader-lock" />
     <title>Nainer — ERP</title>
     <!-- base-URL da API lida em runtime, não embutida (spec §3.1) -->
     <script src="/config.js"></script>
