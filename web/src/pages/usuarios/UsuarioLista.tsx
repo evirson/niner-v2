@@ -27,6 +27,7 @@ import {
   type Usuario,
 } from '../../lib/usuarios'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -125,6 +126,12 @@ export default function UsuarioLista() {
 
   const usuarios: Usuario[] = data?.itens ?? []
 
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+
+  const { propsDaLinha } = useNavegacaoDeGrid(usuarios.map((linha) => linha.idUsuario))
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -194,8 +201,8 @@ export default function UsuarioLista() {
               </tr>
             </thead>
             <tbody>
-              {usuarios.map((u) => (
-                <tr key={u.idUsuario}>
+              {usuarios.map((u, indice) => (
+                <tr key={u.idUsuario} {...propsDaLinha(u.idUsuario, indice)}>
                   <td>{u.nome}</td>
                   <td className="mono">{u.email}</td>
                   <td>

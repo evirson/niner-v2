@@ -25,6 +25,7 @@ import { formatarEtiquetaMm } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -127,6 +128,10 @@ export default function EtiquetaConfigLista() {
   })
 
   const configs: EtiquetaConfig[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(configs.map((linha) => linha.idConfigEtiqueta))
   const estadoAtual: EstadoListaEtiquetaConfig = { busca, pagina, ordenarPor, direcao }
 
   return (
@@ -193,8 +198,8 @@ export default function EtiquetaConfigLista() {
               </tr>
             </thead>
             <tbody>
-              {configs.map((ec) => (
-                <tr key={ec.idConfigEtiqueta}>
+              {configs.map((ec, indice) => (
+                <tr key={ec.idConfigEtiqueta} {...propsDaLinha(ec.idConfigEtiqueta, indice)}>
                   <td>{ec.nome}</td>
                   <td>{formatarEtiquetaMm(ec.larguraRoloMm)} mm</td>
                   <td>{ec.numeroColunas}</td>

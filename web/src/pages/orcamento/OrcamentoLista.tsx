@@ -21,6 +21,7 @@ import { maiusculas } from '../../lib/texto'
 import OrcamentoImpressaoModal from './OrcamentoImpressaoModal'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const TAMANHO_PAGINA = 50
 
@@ -106,6 +107,10 @@ export default function OrcamentoLista() {
   })
 
   const orcamentos = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(orcamentos.map((linha) => linha.idOrcamento))
   const totalPaginas = Math.max(1, Math.ceil((data?.total ?? 0) / TAMANHO_PAGINA))
 
   return (
@@ -233,8 +238,8 @@ export default function OrcamentoLista() {
                 </tr>
               </thead>
               <tbody>
-                {orcamentos.map((o) => (
-                  <tr key={o.idOrcamento}>
+                {orcamentos.map((o, indice) => (
+                  <tr key={o.idOrcamento} {...propsDaLinha(o.idOrcamento, indice)}>
                     <td className="mono">{o.idOrcamento}</td>
                     <td>{formatarData(o.dataOrcamento)}</td>
                     <td>{formatarDataSimples(o.dataValidade)}</td>

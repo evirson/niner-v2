@@ -29,6 +29,7 @@ import { listarEmpresas } from '../../lib/empresas'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/masks'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -145,6 +146,10 @@ export default function ContaCorrenteMovimentoLista() {
 
   const movimentos: ContaCorrenteMovimento[] = data?.itens ?? []
 
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(movimentos.map((linha) => linha.localizador))
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -255,8 +260,8 @@ export default function ContaCorrenteMovimentoLista() {
               </tr>
             </thead>
             <tbody>
-              {movimentos.map((m) => (
-                <tr key={m.localizador}>
+              {movimentos.map((m, indice) => (
+                <tr key={m.localizador} {...propsDaLinha(m.localizador, indice)}>
                   <td>{formatarData(m.dataMovimento)}</td>
                   <td className="mono">{m.idContaCorrente}</td>
                   <td className="mono">{m.numeroDocumento}</td>

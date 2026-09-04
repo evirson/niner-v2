@@ -15,6 +15,7 @@ import { hojeISO } from '../../lib/datas'
 import { dataParaIso, dataValida, formatarMoeda, isoParaData, mascararData } from '../../lib/masks'
 import { ApiError } from '../../lib/api'
 import CancelamentoDevolucaoModal from './CancelamentoDevolucaoModal'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -121,6 +122,10 @@ export default function CancelamentoDevolucao() {
   }
 
   const devolucoes: DevolucaoParaCancelamento[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(devolucoes.map((linha) => linha.idDevolucao))
   const totalPaginas = data?.totalPaginas ?? 1
 
   const rotuloFiltro =
@@ -190,8 +195,8 @@ export default function CancelamentoDevolucao() {
                   </tr>
                 </thead>
                 <tbody>
-                  {devolucoes.map((d) => (
-                    <tr key={d.idDevolucao}>
+                  {devolucoes.map((d, indice) => (
+                    <tr key={d.idDevolucao} {...propsDaLinha(d.idDevolucao, indice)}>
                       <td className="mono">{d.idDevolucao}</td>
                       <td>{d.nomeEmpresa}</td>
                       <td>{formatarData(d.dataDevolucao)}</td>

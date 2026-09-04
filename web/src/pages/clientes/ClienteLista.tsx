@@ -30,6 +30,7 @@ import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -140,6 +141,10 @@ export default function ClienteLista() {
   })
 
   const clientes: Cliente[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04). Piloto desta tela: se o
+  // dono do produto aprovar, é uma linha por grid para virar padrão. Ver `useNavegacaoDeGrid`.
+  const { propsDaLinha } = useNavegacaoDeGrid(clientes.map((c) => c.idCliente))
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
@@ -233,8 +238,8 @@ export default function ClienteLista() {
               </tr>
             </thead>
             <tbody>
-              {clientes.map((c) => (
-                <tr key={c.idCliente}>
+              {clientes.map((c, indice) => (
+                <tr key={c.idCliente} {...propsDaLinha(c.idCliente, indice)}>
                   <td>{c.nome}</td>
                   <td className="mono">{c.cpfCnpj ? mascararCpfCnpj(c.cpfCnpj, c.fisicaJuridica) : '—'}</td>
                   <td>{c.nomeCategoria}</td>

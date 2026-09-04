@@ -29,6 +29,7 @@ import {
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -129,6 +130,10 @@ export default function ProdutoLista() {
   })
 
   const produtos: Produto[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(produtos.map((linha) => linha.idProduto))
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
@@ -223,8 +228,8 @@ export default function ProdutoLista() {
               </tr>
             </thead>
             <tbody>
-              {produtos.map((p) => (
-                <tr key={p.idProduto}>
+              {produtos.map((p, indice) => (
+                <tr key={p.idProduto} {...propsDaLinha(p.idProduto, indice)}>
                   <td>{p.descricao}</td>
                   <td>{p.marca ?? '—'}</td>
                   <td>{p.referencia ?? '—'}</td>

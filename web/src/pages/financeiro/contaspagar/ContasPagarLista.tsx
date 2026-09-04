@@ -27,6 +27,7 @@ import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEm
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
 import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../../lib/modais'
+import { useNavegacaoDeGrid } from '../../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -200,6 +201,8 @@ export default function ContasPagarLista() {
 
   const totalPaginas = data?.totalPaginas ?? 1
   const contas: ContaPagar[] = data?.itens ?? []
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+  const { propsDaLinha } = useNavegacaoDeGrid(contas.map((linha) => linha.idContaPagar))
 
   return (
     <div className="lista-tela">
@@ -267,8 +270,8 @@ export default function ContasPagarLista() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contas.map((c) => (
-                    <tr key={c.idContaPagar}>
+                  {contas.map((c, indice) => (
+                    <tr key={c.idContaPagar} {...propsDaLinha(c.idContaPagar, indice)}>
                       <td>{c.nomeFornecedor}</td>
                       <td>{c.nomeEmpresa}</td>
                       <td>{c.notaFiscal ?? '—'}</td>

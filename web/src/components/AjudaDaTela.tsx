@@ -93,6 +93,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Clientes',
     objetivo: 'Encontrar e gerenciar os clientes já cadastrados.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por nome para encontrar um cliente.',
       'Filtre por categoria ou por status (Ativos, Inativos ou Todos).',
       'Clique em "Editar" para abrir o cadastro, ou em "Excluir" para remover.',
@@ -151,6 +152,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Funcionários',
     objetivo: 'Encontrar e gerenciar os funcionários já cadastrados.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por nome para encontrar um funcionário.',
       'Filtre por status (Ativos, Inativos ou Todos).',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -179,6 +181,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Fornecedores',
     objetivo: 'Encontrar e gerenciar os fornecedores já cadastrados.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por razão social ou nome fantasia.',
       'Filtre por plano de contas ou por status (Ativos, Inativos ou Todos).',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -211,6 +214,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Entrada de Produtos por Compra',
     objetivo: 'Ver o histórico de entradas de mercadoria e iniciar uma nova.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Ao abrir a tela, um popup pede os filtros (fornecedor, empresa, nota fiscal, período) — clique em "Localizar" para ver a lista, "＋ Nova entrada" para pular direto para uma nova entrada, ou "Fechar" para voltar à tela anterior.',
       'Clique no ícone verde para ver os detalhes (itens, quantidades e custos) de uma entrada já confirmada.',
       'Administradores podem cancelar uma entrada (ícone vermelho) informando o motivo — o estoque recebido é estornado e as contas a pagar geradas por ela são removidas.',
@@ -268,6 +272,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Transferências entre Empresas',
     objetivo: 'Ver o histórico de transferências de produtos entre empresas e iniciar uma nova.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Clique em "＋ Nova Transferência" para mover produtos da empresa atual para outra.',
       'Clique no ícone verde para ver os detalhes (produtos e quantidades) de uma transferência já feita.',
       'Na tela de detalhes, use "Imprimir Guia" para gerar a Guia de Transferência (folha A4, com linhas de assinatura para conferência na origem e recebimento no destino). Transferência longa ocupa mais de uma folha — o cabeçalho sai só na primeira.',
@@ -296,6 +301,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Usuários',
     objetivo: 'Encontrar e gerenciar os usuários que acessam o sistema.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por nome ou e-mail para encontrar um usuário.',
       'Filtre por status (Ativos, Inativos ou Todos).',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -489,6 +495,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Perfis Fiscais',
     objetivo: 'Cadastrar as regras de tributação (CFOP, ICMS, PIS/COFINS, IBS/CBS) que o produto usa na nota — sem digitar isso em cada produto individualmente.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Todo tenant já nasce com 3 perfis prontos: "Revenda Tributada Normal" (CSOSN 102, o caso comum) e "Revenda com Substituição Tributária (ST)" (CSOSN 500, comum em confecção e calçado) — cada um já cobre os três CRT do produto (1, 2 e 4) — e "Não Informado" (sem regra nenhuma, de propósito): a Importação de Produtos usa esse último quando a tributação do item ainda não foi definida.',
       'Um perfil agrupa uma ou mais regras. Cada regra vale para um contexto: CRT do emitente, UF de destino (ou "*" para qualquer uma), tipo de destinatário e tipo de operação.',
       'A coluna "Regime" da lista mostra Simples/MEI — não é um campo que se escolhe, é calculado a partir das regras do perfil (CRT 1 ou 2 = Simples Nacional, CRT 4 = MEI).',
@@ -563,6 +570,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Documentos Fiscais',
     objetivo: 'Consultar as NFC-e/NF-e emitidas pela empresa, ver o XML autorizado, reimprimir o comprovante (DANFCE ou DANFE) e checar a situação atual direto na SEFAZ.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Escolha a empresa e o período (data inicial/final) no filtro do topo — o período máximo é de 365 dias.',
       'Opcionalmente filtre por modelo (NFC-e/NF-e) ou por situação (autorizado, cancelado, rejeitado etc.).',
       'Clique no ícone de olho para ver o XML autorizado do documento.',
@@ -628,6 +636,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Plano de Contas',
     objetivo: 'Encontrar e gerenciar as contas do plano de contas (usadas por fornecedores, contas a pagar e relatórios).',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por código (ex.: "4.01") ou por descrição.',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
     ],
@@ -640,6 +649,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Produtos',
     objetivo: 'Encontrar e gerenciar os produtos já cadastrados.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por descrição para encontrar um produto.',
       'Filtre por categoria ou por status (Ativos, Inativos ou Todos).',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -698,6 +708,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Tipo de Carteira',
     objetivo: 'Encontrar e gerenciar as formas de pagamento (categoria/prazo/parcelas/taxa/desconto/acréscimo) já cadastradas.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por nome para encontrar um tipo de carteira.',
       'As colunas "% Desconto"/"% Acréscimo" mostram o ajuste de preço aplicado por essa forma de pagamento.',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -731,6 +742,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Conta Corrente',
     objetivo: 'Encontrar e gerenciar as contas bancárias já cadastradas.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por número da conta ou por descrição para encontrar uma conta.',
       'Filtre por status (Ativas, Inativas ou Todas).',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -760,6 +772,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Movimentação de Conta Corrente',
     objetivo: 'Encontrar e gerenciar os lançamentos (extrato manual) de conta corrente.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Use a busca por número do documento, ou filtre por período, empresa, plano de contas, conta corrente e "Compensado".',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
       'Lançamento marcado como "Baixa automática" veio do pagamento de uma conta a pagar, não da digitação aqui — por isso não tem os ícones de editar e excluir.',
@@ -788,6 +801,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Contas a Pagar / Pagas',
     objetivo: 'Encontrar e gerenciar as duplicatas de fornecedor a pagar.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Ao entrar na tela, um popup pede os filtros: fornecedor, empresa, nota fiscal, duplicata, e o período de vencimento ou de pagamento.',
       'Deixe tudo em branco e clique em "Localizar" para ver todas as contas, ou use "＋ Nova Conta a Pagar" para pular direto pro cadastro.',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
@@ -863,6 +877,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Cancelamento de Devolução de Produtos',
     objetivo: 'Localizar um vale-mercadoria ainda não usado e cancelá-lo, retirando do estoque a quantidade que a devolução tinha devolvido.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'No popup inicial, informe o número do vale (ignora as datas) ou um intervalo de datas da devolução.',
       'A grid mostra só vales ainda canceláveis — não usados e não cancelados.',
       'Clique no ícone de visualizar na linha do vale para ver o resumo e os itens que vão sair do estoque.',
@@ -1180,6 +1195,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Configuração de Etiqueta de Produtos',
     objetivo: 'Ver e gerenciar os layouts de etiqueta de código de barras já cadastrados.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Um tenant pode ter várias configurações nomeadas — impressoras/rolos diferentes por loja ou situação.',
       'Clique em "Nova configuração" pra montar um layout do zero, ou em "Editar" pra ajustar um já existente.',
       '"Visualizar" abre o layout em modo só leitura, sem risco de mudar nada por engano.',
@@ -1224,6 +1240,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Orçamentos',
     objetivo: 'Consultar, imprimir, enviar por WhatsApp e cancelar orçamentos emitidos para clientes que ainda não fecharam a compra.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Filtre por período de emissão e por situação. "Aberto" é o único estado que ainda pode virar venda.',
       'Clique no ícone verde para ver o orçamento inteiro: itens, preços, validade e — se já virou venda — o número dela.',
       'No detalhe, "Imprimir / WhatsApp" abre o documento em A4 ou em bobina (a mesma impressora da papeleta de venda).',
@@ -1263,6 +1280,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     objetivo:
       'Acompanhar o trabalho que leva tempo — o carro na oficina, o cachorro no banho — do momento em que entra até a hora de cobrar.',
     passos: [
+      'Use as setas ↑ e ↓ para percorrer a lista sem tirar a mão do teclado — a linha em que você está fica destacada. O foco continua no campo de busca, então dá para refinar o que digitou e voltar a descer.',
       'Localize pelo que está em serviço (placa, nome do animal, número de série), pelo cliente ou pelo número da OS.',
       'O filtro de situação mostra em que pé está cada uma: Aberta, Aprovada, Em execução, Concluída, Faturada ou Cancelada.',
       'O ícone verde abre a OS só para leitura; o azul abre para alterar (acrescentar serviço, peça, mudar quantidade).',

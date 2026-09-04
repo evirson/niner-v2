@@ -22,6 +22,7 @@ import Toast from '../../components/Toast'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
 import DanfeModal from '../vendas/DanfeModal'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 /** Só nestas situações o comprovante do PDV vem com {@code dadosFiscais} preenchido (autorizado
  *  ou em contingência) — nas outras, abrir o DANFCE mostraria um recibo comum sem QR/protocolo. */
@@ -147,6 +148,12 @@ export default function DocumentoFiscalLista() {
   })
 
   const itens = data?.itens ?? []
+
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+
+  const { propsDaLinha } = useNavegacaoDeGrid(itens.map((linha) => linha.idDocumentoFiscal))
   const totalPaginas = data?.totalPaginas ?? 1
 
   async function abrirXml(item: DocumentoFiscalItem) {
@@ -308,8 +315,8 @@ export default function DocumentoFiscalLista() {
                 </tr>
               </thead>
               <tbody>
-                {itens.map((item) => (
-                  <tr key={item.idDocumentoFiscal}>
+                {itens.map((item, indice) => (
+                  <tr key={item.idDocumentoFiscal} {...propsDaLinha(item.idDocumentoFiscal, indice)}>
                     <td>{item.modelo === 65 ? 'NFC-e' : 'NF-e'}</td>
                     <td className="mono">
                       {item.numero === null ? '—' : `${item.serie}/${item.numero}`}

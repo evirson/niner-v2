@@ -25,6 +25,7 @@ import {
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -120,6 +121,10 @@ export default function ContaCorrenteLista() {
 
   const contas: ContaCorrente[] = data?.itens ?? []
 
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(contas.map((linha) => linha.idContaCorrente))
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -188,8 +193,8 @@ export default function ContaCorrenteLista() {
               </tr>
             </thead>
             <tbody>
-              {contas.map((c) => (
-                <tr key={c.idContaCorrente}>
+              {contas.map((c, indice) => (
+                <tr key={c.idContaCorrente} {...propsDaLinha(c.idContaCorrente, indice)}>
                   <td className="mono">{c.idContaCorrente}</td>
                   <td>{c.descricao}</td>
                   <td>{c.nomeEmpresa}</td>

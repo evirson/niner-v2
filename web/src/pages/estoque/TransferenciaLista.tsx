@@ -24,6 +24,7 @@ import {
 } from '../../lib/transferencias'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -129,6 +130,8 @@ export default function TransferenciaLista() {
 
   const totalPaginas = data?.totalPaginas ?? 1
   const transferencias = data?.itens ?? []
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+  const { propsDaLinha } = useNavegacaoDeGrid(transferencias.map((linha) => linha.idTransferencia))
 
   return (
     <div className="lista-tela">
@@ -237,8 +240,8 @@ export default function TransferenciaLista() {
                 </tr>
               </thead>
               <tbody>
-                {transferencias.map((t) => (
-                  <tr key={t.idTransferencia}>
+                {transferencias.map((t, indice) => (
+                  <tr key={t.idTransferencia} {...propsDaLinha(t.idTransferencia, indice)}>
                     <td className="mono" style={{ textAlign: 'right' }}>
                       {t.idTransferencia}
                     </td>

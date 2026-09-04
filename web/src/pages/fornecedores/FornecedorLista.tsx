@@ -29,6 +29,7 @@ import { mascararCpfCnpj, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -131,6 +132,10 @@ export default function FornecedorLista() {
   })
 
   const fornecedores: Fornecedor[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(fornecedores.map((linha) => linha.idFornecedor))
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
@@ -218,8 +223,8 @@ export default function FornecedorLista() {
               </tr>
             </thead>
             <tbody>
-              {fornecedores.map((f) => (
-                <tr key={f.idFornecedor}>
+              {fornecedores.map((f, indice) => (
+                <tr key={f.idFornecedor} {...propsDaLinha(f.idFornecedor, indice)}>
                   <td>{f.razaoSocial}</td>
                   <td className="mono">{f.cnpj ? mascararCpfCnpj(f.cnpj, false) : '—'}</td>
                   <td>{f.idPlanoContas} — {f.descricaoPlanoContas}</td>

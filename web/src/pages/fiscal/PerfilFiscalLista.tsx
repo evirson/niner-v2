@@ -24,6 +24,7 @@ import {
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -125,6 +126,12 @@ export default function PerfilFiscalLista() {
   })
 
   const perfis: PerfilFiscalListaItem[] = data?.itens ?? []
+
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+
+  const { propsDaLinha } = useNavegacaoDeGrid(perfis.map((linha) => linha.idPerfilFiscal))
   const estadoAtual: EstadoListaPerfilFiscal = { busca, pagina, ordenarPor, direcao }
 
   return (
@@ -192,8 +199,8 @@ export default function PerfilFiscalLista() {
                 </tr>
               </thead>
               <tbody>
-                {perfis.map((p) => (
-                  <tr key={p.idPerfilFiscal}>
+                {perfis.map((p, indice) => (
+                  <tr key={p.idPerfilFiscal} {...propsDaLinha(p.idPerfilFiscal, indice)}>
                     <td>{p.nome}</td>
                     <td>
                       <span className={`badge ${p.ativo ? 'badge-sucesso' : ''}`}>{p.ativo ? 'Ativo' : 'Inativo'}</span>

@@ -20,6 +20,7 @@ import OrdemServicoImpressaoModal from './OrdemServicoImpressaoModal'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const TAMANHO_PAGINA = 50
 
@@ -105,6 +106,10 @@ export default function OrdensServico() {
   })
 
   const ordens = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(ordens.map((linha) => linha.idOrdemServico))
   const totalPaginas = Math.max(1, data?.totalPaginas ?? 1)
 
   return (
@@ -215,8 +220,8 @@ export default function OrdensServico() {
                 </tr>
               </thead>
               <tbody>
-                {ordens.map((o) => (
-                  <tr key={o.idOrdemServico}>
+                {ordens.map((o, indice) => (
+                  <tr key={o.idOrdemServico} {...propsDaLinha(o.idOrdemServico, indice)}>
                     <td className="mono">{o.idOrdemServico}</td>
                     <td>{formatarData(o.dataAbertura)}</td>
                     <td>{o.nomeCliente}</td>

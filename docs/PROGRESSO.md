@@ -11,6 +11,72 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-09-04 (2) — GRID NAVEGÁVEL POR ↑/↓ em 18 telas de lista
+>
+> **Medido:** `tsc -b` limpo · 6 telas abertas no navegador · cada guarda exercitada e medida no
+> DOM · nenhuma migration, nenhuma mudança de backend.
+>
+> Pedido dele sobre a grid de Clientes: *"gostaria de poder navegar nesta grid, com seta pra baixo
+> e seta pra cima, e destacar a linha que está selecionada, com uma barra, tipo uma marca d'água
+> transparente na linha toda"*. Feito primeiro só ali, para ele ver; aprovado, propagado.
+>
+> ### O que já existia — e por que nada disso servia direto
+>
+> Os dois ingredientes estavam no projeto: o realce translúcido (`.pdv-ledger-linha.pdv-selecionada`)
+> e navegação por seta em 4 telas. Mas:
+>
+> ⚠️ **`.linha-selecionada` está TOMADA.** Oito telas a usam, com **três** sentidos: registro
+> escolhido para uma ação (Pesquisa de Vendas, Recebimento de Crediário), item marcado numa seleção
+> múltipla (Devolução, Seleção de Itens) e — no `PuxarOrcamentoModal` — **produto inativo**, que não
+> é seleção nenhuma. Reaproveitá-la daria ao cursor do teclado o realce **sólido** e mudaria o
+> visual daquelas telas sem ninguém pedir. Daí `.linha-focada`, conceito próprio: *onde o cursor
+> está*, não *o que eu escolhi*.
+>
+> ⭐ **O foco NÃO é roubado, e é o oposto do que o PDV faz.** No ledger do PDV o `.focus()` na
+> `<tr>` é certo — a grid é o centro da tela. Aqui o uso é digitar no campo de busca e descer com a
+> seta; focar a linha tiraria o campo do operador no meio da digitação.
+>
+> ### ⚠️ O defeito que só apareceu abrindo a tela
+>
+> `scrollIntoView` **não sabe que o `<th>` é `position: sticky`**. Medido ao subir até o topo da
+> lista de Clientes: a primeira linha ficava **32 px coberta** pelo cabeçalho, aparecendo só uma
+> fatia. Corrigido com `scroll-margin-top` tirado da **altura real** do cabeçalho — `table` e
+> `table-compacta` têm padding diferente, e um valor fixo erraria numa das duas. Depois: **0 px**.
+>
+> ### O que foi medido, guarda por guarda
+>
+> | Comportamento | Como foi medido |
+> |---|---|
+> | Navegação | 5 teclas → 5 transições no DOM (MutationObserver), parou na linha certa |
+> | Foco preservado | `document.activeElement` continua `INPUT` |
+> | Pontas | para na primeira/última, **não circula** — dar a volta pareceria troca de página |
+> | Cabeçalho sticky | 0 px cobertos (eram 32) |
+> | Refetch (alt-tab) | seleção **sobrevive** — nesta base o `refetchOnWindowFocus` já apagou dado digitado antes |
+> | `<select>` | a seta troca a opção e a grid **não** navega |
+> | Troca de filtro | reseta, porque a lista é outra |
+>
+> ### ⛔ Fora do padrão de propósito
+>
+> - **Pesquisa de Vendas** e **Devolução ao Fornecedor** — o realce ali já significa seleção ou
+>   marcação; dois realces concorrentes na mesma linha confundiriam.
+> - **Conformidade Fiscal** — a tabela paginada dela é do **modal de drill-down**, não uma grid de
+>   lista (foi por isso que ela apareceu no levantamento por paginação; conferido antes de aplicar).
+> - **Relatórios** — a linha destacada entraria na **captura do PDF**, que é visual.
+>
+> ⚠️ **Limitação conhecida:** em tela cujo foco automático cai num `<select>` (Documentos Fiscais),
+> a seta não navega até o operador sair do filtro. É a guarda funcionando — a seta pertence ao
+> select —, não um defeito, mas é assimétrico entre as telas.
+>
+> ### O que ficou por medir
+>
+> Das 18 telas, **6 foram abertas** (Clientes, Produtos, Fornecedores, Plano de Contas, Orçamentos,
+> Tipos de Carteira, Documentos Fiscais). As demais receberam a mesma transformação, conferida por
+> script (import resolve, `<tr>` da grid principal e não de modal, hook sem `return` antecipado
+> antes dele) e por `tsc`, mas **não foram abertas**.
+>
+> ⚠️ Duas telas apareceram **sem linhas** no ambiente de teste (Contas a Pagar e Movimento de Conta
+> Corrente) — sem dados, não é defeito, mas também não exercitou nada.
+
 > ## 📌 2026-09-04 — TEMA CLARO AZUL, PDF PRETO NO BRANCO, e a extensão que venceu o produto
 >
 > **Medido:** `tsc -b` limpo em 26 arquivos · 4 telas abertas no navegador · **3 PDFs gerados e

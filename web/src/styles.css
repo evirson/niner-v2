@@ -269,6 +269,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .table tbody tr[tabindex] { cursor: pointer; }
 .table tbody tr[tabindex]:hover td { background: var(--surface-2); }
 .table tbody tr.linha-selecionada td { background: var(--accent); color: var(--accent-ink); }
+
+/* Cursor de navegação por teclado da grid (setas para cima/baixo) — 2026-09-04, pedido do dono
+   do produto na tela de Clientes, para ver como fica antes de virar padrão.
+   ⚠️ Classe PRÓPRIA, não a `.linha-selecionada` acima: aquela é realce SÓLIDO e já está tomada
+   por 8 telas com três sentidos diferentes (registro escolhido para uma ação, item marcado numa
+   seleção múltipla e — no PuxarOrcamentoModal — produto INATIVO, que não é seleção nenhuma).
+   Aqui o conceito é outro: onde o cursor do teclado está.
+   O realce é translúcido de propósito (a “marca d’água” que ele pediu): a linha continua legível
+   e as bordas da tabela aparecem por baixo. Sai de `--accent-rgb`, então acompanha o tema — azul
+   no claro, verde-água no escuro — sem cor literal em lugar nenhum.
+   A faixa à esquerda dá a marca vertical em monitor de contraste ruim, onde 14% de alpha quase
+   some; `box-shadow: inset` e não `border-left`, que empurraria a primeira coluna 3px. */
+.table tbody tr.linha-focada td { background: rgba(var(--accent-rgb), .14); }
+.table tbody tr.linha-focada td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 /* ⚠️ `.muted` (cinza fixo) dentro de uma linha selecionada some contra o fundo `--accent` — a
    cor do texto secundário não acompanha a inversão da linha. Herdar a cor e baixar a opacidade
    preserva a hierarquia visual ("isto é secundário") sem perder contraste. Vale para qualquer

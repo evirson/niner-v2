@@ -27,6 +27,7 @@ import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../l
 import { maiusculas } from '../../../lib/texto'
 import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../../lib/modais'
+import { useNavegacaoDeGrid } from '../../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -163,6 +164,8 @@ export default function EntradaMercadoriaLista() {
 
   const totalPaginas = data?.totalPaginas ?? 1
   const entradas = data?.itens ?? []
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+  const { propsDaLinha } = useNavegacaoDeGrid(entradas.map((linha) => linha.idMovimento))
 
   return (
     <div className="lista-tela">
@@ -226,8 +229,8 @@ export default function EntradaMercadoriaLista() {
                 </tr>
               </thead>
               <tbody>
-                {entradas.map((e) => (
-                  <tr key={e.idMovimento}>
+                {entradas.map((e, indice) => (
+                  <tr key={e.idMovimento} {...propsDaLinha(e.idMovimento, indice)}>
                     <td>{formatarData(e.dataMovimento)}</td>
                     <td>{e.nomeFornecedor ?? '—'}</td>
                     <td>{e.notaFiscal ?? '—'}</td>

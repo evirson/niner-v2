@@ -26,6 +26,7 @@ import {
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -135,6 +136,10 @@ export default function PlanoContasLista() {
 
   const planos: PlanoContas[] = data?.itens ?? []
 
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(planos.map((linha) => linha.idPlanoContas))
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -203,8 +208,8 @@ export default function PlanoContasLista() {
               </tr>
             </thead>
             <tbody>
-              {planos.map((p) => (
-                <tr key={p.idPlanoContas}>
+              {planos.map((p, indice) => (
+                <tr key={p.idPlanoContas} {...propsDaLinha(p.idPlanoContas, indice)}>
                   <td className="mono" style={{ paddingLeft: (p.nivel - 1) * 16 }}>
                     {p.idPlanoContas}
                   </td>

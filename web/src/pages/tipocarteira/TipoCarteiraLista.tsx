@@ -26,6 +26,7 @@ import {
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -142,6 +143,10 @@ export default function TipoCarteiraLista() {
   })
 
   const carteiras: TipoCarteira[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(carteiras.map((linha) => linha.idCarteira))
   const estadoAtual: EstadoListaTipoCarteira = { busca, pagina, ordenarPor, direcao }
 
   return (
@@ -207,8 +212,8 @@ export default function TipoCarteiraLista() {
               </tr>
             </thead>
             <tbody>
-              {carteiras.map((tc) => (
-                <tr key={tc.idCarteira}>
+              {carteiras.map((tc, indice) => (
+                <tr key={tc.idCarteira} {...propsDaLinha(tc.idCarteira, indice)}>
                   <td>{tc.nomeCarteira}</td>
                   <td>{tc.prazoPagamento}</td>
                   <td>{formatarTaxaOuTraco(tc.taxaAdministradora)}</td>

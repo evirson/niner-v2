@@ -28,6 +28,7 @@ import { formatarPercentual, mascararCpfCnpj, mascararTelefone } from '../../lib
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { fecharAoClicarNoFundo } from '../../lib/modais'
+import { useNavegacaoDeGrid } from '../../lib/useNavegacaoDeGrid'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -129,6 +130,10 @@ export default function FuncionarioLista() {
   })
 
   const funcionarios: Funcionario[] = data?.itens ?? []
+
+  // Navegação por ↑/↓ na grid, com a linha corrente realçada (2026-09-04).
+
+  const { propsDaLinha } = useNavegacaoDeGrid(funcionarios.map((linha) => linha.idFuncionario))
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
@@ -210,8 +215,8 @@ export default function FuncionarioLista() {
               </tr>
             </thead>
             <tbody>
-              {funcionarios.map((f) => (
-                <tr key={f.idFuncionario}>
+              {funcionarios.map((f, indice) => (
+                <tr key={f.idFuncionario} {...propsDaLinha(f.idFuncionario, indice)}>
                   <td>{f.nome}</td>
                   <td className="mono">{f.cpf ? mascararCpfCnpj(f.cpf, true) : '—'}</td>
                   <td className="mono">{f.telefone ? mascararTelefone(f.telefone) : '—'}</td>
