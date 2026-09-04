@@ -394,3 +394,94 @@ por venda usa `media()`, com 2 casas mas sem cara de dinheiro.
 **Item 17.** O popup obrigatório de filtros fechava com `navigate('/')`, empilhando histórico —
 passou a `navigate(-1)`, que `RelatorioDre` e `FluxoCaixa` já usavam. Mesma correção em Comissões,
 Contas a Receber, Estoque e Movimentação de Produtos.
+
+---
+
+**Revisão 2026-09-04 — o PDF deixou de ser "o tema claro" e virou paleta de IMPRESSÃO; o cabeçalho
+das colunas passou a se repetir em todas as páginas.** Vale para os **11** módulos `lib/*Captura.ts`,
+não só o Relatório de Vendas.
+
+**Pedido do dono do produto:** *"como isso vai ser impresso ou em impressora laser ou jato de tinta,
+o bom era que os relatórios, independente do tema, ficassem letras pretas e fundo branco"*. Uma
+página de relatório é quase toda fundo; colorida, é um cartucho por relatório.
+
+**O que mudou no mecanismo.** A revisão de 2026-08-02 (acima) fazia a captura reproduzir o **tema
+claro do produto**, lendo `:root[data-theme='light']` do `styles.css`. Isso era bom enquanto o tema
+claro era neutro e ficou errado no dia em que a marca virou azul (2026-09-04): o cabeçalho da tabela
+saiu `#e9eff6` no papel. Hoje `lib/paletaDeImpressaoParaCaptura.ts` — renomeado de
+`temaClaroParaCaptura.ts`, porque o nome antigo passaria a mentir — declara uma paleta **literal e
+própria**:
+
+| Token | Valor | Por quê |
+|---|---|---|
+| `--ground` / `--surface` / `--field-bg` | `#ffffff` | papel |
+| `--surface-2` (cabeçalho da tabela) | `#f2f2f2` | sem nenhuma distinção a faixa some numa tabela de 291 linhas; 5% de cinza é toner desprezível |
+| `--ink` | `#000000` | texto |
+| `--ink-muted` / `--label-color` | `#333333` | rótulo de coluna, eixo de gráfico |
+| `--line` / `--line-strong` | `#cccccc` / `#8a8a8a` | cinza neutro, não a cor da marca |
+| `--accent`, `--danger`, `--sucesso`, `--aviso`, `--info` | **mantidos coloridos** | são informação, não decoração |
+
+⭐ **Por que as cores de série continuam coloridas:** o Fluxo de Caixa distingue entrada de saída
+por `--sucesso` × `--danger`; duas barras cinza-idênticas apagariam a informação que justifica o
+gráfico. Nos relatórios elas aparecem só como barra e como fundo com 12% de alpha
+(`.relatorio-composicao-card.destaque`) — ambos imprimem com pouco toner. Os fundos sólidos de
+`--accent` (paginação ativa, linha selecionada) não estão na área capturada.
+
+⚠️ **Paleta de impressão não espelha o tema.** Mudar a cor da marca não pode mexer nela — foi
+exatamente o acoplamento que produziu o defeito.
+
+⛔ **E havia `COR_FUNDO_PDF = '#f5f4f0'` hardcoded nos 11 arquivos** (o `backgroundColor` do
+html2canvas), sobrevivendo à troca dos tokens. Trocar o token e esquecer as cópias literais é o
+defeito mais recorrente do repositório.
+
+**Dark Reader contaminava o PDF.** Medido no arquivo real: `#18191b`, que é
+`--darkreader-neutral-background` da extensão, não o tema escuro do produto. Na tela não dá para
+vencê-la (ela reinjeta as folhas em segundos — daí o `<meta name="darkreader-lock">` no
+`index.html`), mas **no PDF dá**: o clone do html2canvas é nosso e não é reinjetado.
+`removerDarkReaderDoClone` apaga as folhas **e** o que ela escreve no `style` inline de cada
+elemento — só as folhas deixaria os `var(--darkreader-inline-*)` sem valor, pior que a cor errada.
+Relatório que vai para o contador não pode depender da extensão do lojista.
+
+---
+
+**Cabeçalho das colunas em todas as páginas** (`lib/cabecalhoRepetidoPdf.ts`).
+
+⚠️ **`<thead>` + `@media print` não fazem nada aqui.** O PDF não é impressão de HTML: é uma imagem
+única (2638 × 20590 px no Relatório de Estoque) que o jsPDF fatia deslocando-a a cada página, então
+o cabeçalho é pixel dentro dela e aparece só onde calhou — a página 1 de 13. Nas outras 12 o lojista
+lia "R$ 71,42" sem saber se era custo unitário ou total.
+
+**Como funciona:** recorta a faixa do `<thead>` da própria imagem e recola no topo das páginas
+seguintes, reservando a altura dela no cálculo de quanto conteúdo cabe. A altura disponível **não é
+a mesma em toda página**, por isso o número de páginas sai de um laço (`dividirEmPaginas`), não de
+uma divisão.
+
+⭐ **Recortar da imagem grande, não fotografar o `<thead>` à parte:** a largura das colunas é
+resolvida pelo layout da tabela inteira, e um cabeçalho capturado sozinho sairia com colunas de
+outra largura — desalinhado do conteúdo que deveria rotular, que é pior que não repetir.
+
+⚠️ **A faixa é medida dentro do CLONE, no `onclone`, nunca na tela.** Dois motivos, os dois mordem:
+o `<th>` é `position: sticky` (na tela o retângulo acompanha a rolagem, não fica na posição real) e
+o clone tem altura/overflow liberados por `liberarAlturaDosAncestrais`.
+
+⛔ **Duas guardas — e a segunda só apareceu testando:**
+
+1. **Mais de um `<thead>` → não repete.** DRE e Fluxo de Caixa são feitos de seções, cada uma com o
+   próprio cabeçalho; repetir o da primeira sobre a página que mostra a terceira rotularia as
+   colunas com nomes que não são delas.
+2. **Mesmo com uma tabela, é preciso saber onde ela termina** (`fimCorpoPx`). A Lucratividade tem
+   **uma** tabela com `<thead>` — a guarda 1 não a desliga — e também gráficos e KPIs; sem esta
+   conta, o cabeçalho de colunas apareceria boiando sobre um gráfico. Uma página só leva cabeçalho
+   se **começar dentro** do corpo da tabela.
+
+⭐ **Como verificar sem renderizar o PDF:** conte os operadores `Do` no arquivo. No Estoque,
+`{"I0":13,"I1":12}` prova conteúdo em 13 páginas e cabeçalho em 12 — as páginas 2 a 13. E as duas
+imagens embutidas aparecem como `2638x20590` (conteúdo) e `2638x63` (a faixa recortada).
+
+**Non-goal declarado:** relatório em seções (DRE, Fluxo de Caixa) continua sem repetição. Fazê-lo
+exigiria decidir *qual* cabeçalho vale em cada faixa da imagem — problema maior que este, e
+ninguém pediu.
+
+**O que não foi medido:** 9 dos 11 relatórios receberam a mudança sem ter o PDF gerado (só Estoque
+e Lucratividade foram exercitados de ponta a ponta), e o caso "tabela curta dentro de relatório
+longo" — onde a guarda de `fimCorpoPx` realmente trabalha — não foi exercitado com dados reais.

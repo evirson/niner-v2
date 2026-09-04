@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-04 — **o tema claro virou azul** (paleta do template *ERP Dashboard*, escolhida por ele num piloto reversível `?paleta=a|b|hoje`; o escuro ficou como estava, decisão dele), o **PDF do relatório virou preto no branco** com paleta de impressão própria (era espelho do tema claro — e o bege da paleta antiga estava **hardcoded em 11 arquivos**), e o **cabeçalho das colunas passou a se repetir em todas as páginas**, o que exige código porque o PDF é uma imagem fatiada, não impressão de HTML. ⛔ No meio, o relato *"você bagunçou o tema light"* era a extensão **Dark Reader** repintando por cima (9 folhas injetadas; os tokens do produto estavam corretos) — resolvido com `<meta name="darkreader-lock">`, e ela contaminava o PDF também. Antes disso (2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,140 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-04 — TEMA CLARO AZUL, PDF PRETO NO BRANCO, e a extensão que venceu o produto
+>
+> **Medido:** `tsc -b` limpo em 26 arquivos · 4 telas abertas no navegador · **3 PDFs gerados e
+> medidos pixel a pixel** · nenhuma migration, nenhuma mudança de backend.
+>
+> ### O pedido, em três etapas
+>
+> Ele mandou um template do Figma (*ERP Dashboard*, Community) dizendo que gostou das cores.
+> Analisei o arquivo inteiro: **~9 telas**, o módulo Financeiro **vazio**, dados de exemplo
+> inconsistentes (iPhone com código `CLOTH-BLK-M`). É referência de **aparência**, não de
+> arquitetura — não tem PDV, fiscal, caixa, impressão nem permissões, que é onde mora o Nainer.
+>
+> Montei um **piloto reversível** (`?paleta=a|b|hoje`) com as duas leituras possíveis do que o
+> agradou: o azul do template, ou só amaciar as neutras mantendo o verde-petróleo. Ele abriu,
+> escolheu o azul pelo PDV, e a paleta virou definitiva.
+>
+> ### 🎨 A paleta clara, e os dois desvios que o template não resolvia
+>
+> Estilos oficiais do arquivo: `Primary #001446` · `Second #02437B` · `Third #028BBF` ·
+> `Fourth #98CBDC` · `Fifth #D8E9F0`.
+>
+> ⚠️ **São cinco tons do mesmo azul e branco — não há cor de estado.** O template não precisa
+> delas (as telas dele não têm erro, sucesso, aviso nem badge de situação); o Nainer precisa dos
+> quatro. `--danger #b3261e`, `--sucesso #1b7a4b` e `--info #026b93` foram escolhidos aqui.
+>
+> Rodei os **13 pares críticos de contraste WCAG** antes de escrever qualquer hex, e dois valores
+> do template não passaram:
+>
+> | Token | Template | Adotado | Por quê |
+> |---|---|---|---|
+> | `--field-bg` | `#D8E9F0` (Fifth) | `#dbe7f0` | Fifth sobre card branco dá **1.16** e o campo some; `#dbe7f0` dá **1.26**, a mesma separação de antes |
+> | `--line-strong` | `#98CBDC` (Fourth) | `#8dc2d5` | Fourth puro dá **1.76** contra os **1.89** anteriores, e borda fraca faz a tabela densa perder a grade |
+>
+> 🔵 **Decisão dele: o tema escuro NÃO acompanhou.** Apontei que botão e link ficariam azuis no
+> claro e verdes no escuro — duas identidades no mesmo produto — e que levar só o `--accent` custa
+> ~4 linhas. Ele manteve o escuro como estava. Registrado no `styles.css`, não só aqui.
+>
+> ⚠️ **Escopo: só o `web/`.** `admin/` e `site/` seguem na paleta antiga, e como o `site/` é o
+> *golden file* da spec §3.7, a spec está desalinhada **de propósito** até alguém decidir propagar.
+>
+> ### ⛔ "Você bagunçou o tema light" — e o CSS estava certo
+>
+> Ele mandou a tela escura com o seletor no claro. A medição na página dele:
+>
+> ```
+> niner_tema: "claro"   data-theme: "light"
+> --ground: #d8e9f0     (correto)
+> body pintado: rgb(23, 49, 60)     ← não é nosso
+> 9 tags <style class="darkreader…">
+> --darkreader-neutral-background: #181a1b
+> ```
+>
+> Era a extensão **Dark Reader**. ⚠️ **Ela só age quando a página está clara** — enquanto o ERP
+> estava no escuro ela dormia, e por isso o problema nasceu junto com a paleta nova, parecendo
+> causado por ela. ⛔ **Remover as folhas em runtime não resolve: medido, ela reinjeta 8 em
+> segundos.** A saída é `<meta name="darkreader-lock">` no `index.html` — o mecanismo oficial para
+> a página dizer "eu me temo sozinha". Depois: **0 folhas**, `body` em `rgb(216,233,240)`.
+>
+> ⚠️ Isso **invalida** a nota que `styles.css` carregava desde 08-14 ("o produto não vence o Dark
+> Reader"): vence, desde que declare a tag.
+>
+> ### 🖨️ O PDF: de "tema claro" para paleta de IMPRESSÃO
+>
+> Pedido dele: *"como isso vai ser impresso em laser ou jato de tinta, o bom era que os relatórios,
+> independente do tema, ficassem letras pretas e fundo branco"*. Uma página de relatório é quase
+> toda fundo — colorido, é um cartucho por relatório.
+>
+> Medindo o PDF que ele mandou, eram **dois** defeitos, não um:
+>
+> | Onde | Medido | Vinha de |
+> |---|---|---|
+> | Faixa do topo | `#f5f3f0` | `COR_FUNDO_PDF = '#f5f4f0'` **hardcoded em 11 arquivos** — o bege da paleta antiga |
+> | Cabeçalho da tabela | `#e9eff6` | a captura **lia** `:root[data-theme='light']`, agora azul |
+>
+> ⭐ **A correção não foi trocar os valores: foi mudar de quem a paleta depende.**
+> `temaClaroParaCaptura.ts` virou **`paletaDeImpressaoParaCaptura.ts`** e passou a declarar uma
+> paleta **literal e própria** (fundo `#ffffff`, texto `#000000`, linha `#cccccc`, cabeçalho
+> `#f2f2f2`), sem ler o CSS. Espelhar o tema traria a cor da marca de volta ao papel a cada
+> mudança de identidade. O nome antigo passaria a mentir, por isso o arquivo foi renomeado.
+>
+> ⭐ **As cores de série continuam coloridas** — o Fluxo de Caixa distingue entrada de saída por
+> `--sucesso` × `--danger`, e duas barras cinza-idênticas apagariam a informação que justifica o
+> gráfico. Nos relatórios elas só aparecem como barra e como fundo com 12% de alpha.
+>
+> E o Dark Reader contaminava o PDF também (`#18191b` medido). No papel dá para vencer: o clone do
+> html2canvas é nosso e não é reinjetado. `removerDarkReaderDoClone` apaga as folhas **e** o que
+> ela escreve no `style` inline de cada elemento — só as folhas deixaria os
+> `var(--darkreader-inline-*)` sem valor, pior que a cor errada. Relatório que vai para o contador
+> não pode depender de a extensão do lojista estar atualizada.
+>
+> Resultado medido: topo `#ffffff` · card `#ffffff` · cabeçalho `#f2f2f2` · linhas `#ffffff`.
+>
+> ### 📋 Cabeçalho das colunas repetido em todas as páginas
+>
+> Ele circulou em vermelho: o nome das colunas aparecia só na página 1 de 13.
+>
+> ⚠️ **`<thead>` + `@media print` não fazem nada aqui** — o PDF não é impressão de HTML. É uma
+> imagem única (2638 × 20590 px no Estoque) que o jsPDF fatia deslocando-a a cada página, então o
+> cabeçalho é pixel dentro dela. `lib/cabecalhoRepetidoPdf.ts` recorta a faixa do `<thead>` da
+> própria imagem e recola no topo das páginas seguintes, reservando a altura no cálculo — por isso
+> o número de páginas sai de um **laço**, não de uma divisão.
+>
+> ⭐ **Recortar da imagem grande, não fotografar o `<thead>` à parte:** a largura das colunas vem do
+> layout da tabela inteira; um cabeçalho capturado sozinho sairia desalinhado do que rotula.
+>
+> ⚠️ **Mede-se no CLONE, nunca na tela:** o `<th>` é `position: sticky` (na tela o retângulo
+> acompanha a rolagem) e o clone tem altura/overflow liberados.
+>
+> ⛔ **Duas guardas, e a segunda só apareceu testando:**
+> 1. Relatório com **mais de um `<thead>`** (DRE, Fluxo de Caixa — seções) não repete: o cabeçalho
+>    da 1ª seção rotularia a 3ª, e rótulo errado é pior que rótulo nenhum.
+> 2. Mesmo com **uma** tabela é preciso saber **onde ela termina** — a Lucratividade tem uma tabela
+>    curta mais gráficos, e o cabeçalho apareceria boiando sobre um gráfico. Daí `fimCorpoPx`.
+>
+> ⭐ **Como verificar sem renderizar o PDF:** conte os operadores `Do` no arquivo.
+> `{"I0":13,"I1":12}` prova conteúdo em 13 páginas e cabeçalho em 12 — as páginas 2 a 13.
+>
+> ### O que ficou por medir
+>
+> - **9 dos 11 relatórios** receberam a mudança e **não tiveram o PDF gerado** — só Estoque e
+>   Lucratividade foram exercitados de ponta a ponta.
+> - O caso "tabela curta em relatório longo", onde a guarda de `fimCorpoPx` realmente trabalha,
+>   **não foi exercitado com dados reais** (a Lucratividade coube numa página).
+> - **`.pdv-flash`** (o aviso verde de "item lançado" no PDV) tem contraste **3.18** — mas já era
+>   **3.16** antes da paleta nova. Defeito pré-existente, **não corrigido**, porque o pedido era
+>   paleta e não correção. Trocar o texto para branco leva a 5.34.
+>
+> ### ⚠️ Um erro meu, e o rastro que ele deixou
+>
+> Usei `perl -CSD` para acertar acentos nos comentários e ele fez **dupla codificação**: "área"
+> virou "Ã¡rea" em 10 arquivos, e a reversão transformou um travessão no **byte de controle
+> `0x14`** dentro do fonte. Não quebraria o build — é lixo invisível. Varri os `.ts` por caracteres
+> de controle e limpei. **Para editar texto acentuado nestes fontes, use Node, não `perl -CSD`.**
 
 > ## 📌 2026-09-02 (3) — O `cStat 938` CAIU: CSOSN 500 sem o ST retido (V110)
 >

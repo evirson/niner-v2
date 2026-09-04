@@ -260,3 +260,20 @@ Mesmas duas correções da DRE, pelo mesmo motivo — ver `relatorio-dre.md` par
 2. **OPERADOR fica preso à empresa da sessão.** A tela saiu de `admin_apenas` na V078 e o filtro
    nunca acompanhou — a Lucratividade **consolidada do tenant** ficava ao alcance de quem recebesse
    a tela por concessão, com a empresa escolhível pela URL.
+
+---
+
+**Revisão 2026-09-04 — PDF preto no branco e cabeçalho de coluna repetido.**
+O mecanismo é comum aos 11 relatórios e está descrito em `docs/telas/relatorio-vendas.md`
+(arquivo-padrão de tela de relatório): a captura deixou de reproduzir o **tema claro do
+produto** e passou a declarar uma **paleta de impressão própria** (fundo `#ffffff`, texto
+`#000000`, cabeçalho de tabela `#f2f2f2`), mantendo coloridas só as cores de série, que são
+informação do gráfico. O módulo virou `lib/paletaDeImpressaoParaCaptura.ts`.
+
+⚠️ **Nesta tela o cabeçalho só se repete enquanto a página estiver dentro da tabela.** A
+Lucratividade tem **uma** tabela com `<thead>` (a de despesas por plano de contas) — então a
+guarda de "mais de um cabeçalho" não a desliga — e também gráficos e KPIs. Sem medir onde a
+tabela termina (`fimCorpoPx`), o cabeçalho de colunas apareceria boiando sobre um gráfico.
+Foi este relatório que revelou a necessidade dessa segunda guarda. ⚠️ Com os dados de teste
+ele coube em **uma** página, então o caso "tabela curta em relatório longo" **não chegou a ser
+exercitado** — está declarado como pendência de verificação.

@@ -227,3 +227,17 @@ conferir no navegador se isso é aceitável ou se a grade precisa de variante.
 A lista de sugestões usava `lista-sugestoes`, que também não existe: com 20 resultados, os botões
 empurravam "Plano de Contas", "Situação" e o rodapé para baixo — num modal de altura fixa, o
 operador ficava **sem como gerar** até apagar a busca.
+
+---
+
+**Revisão 2026-09-04 — PDF preto no branco e cabeçalho de coluna repetido.**
+O mecanismo é comum aos 11 relatórios e está descrito em `docs/telas/relatorio-vendas.md`
+(arquivo-padrão de tela de relatório): a captura deixou de reproduzir o **tema claro do
+produto** e passou a declarar uma **paleta de impressão própria** (fundo `#ffffff`, texto
+`#000000`, cabeçalho de tabela `#f2f2f2`), mantendo coloridas só as cores de série, que são
+informação do gráfico. O módulo virou `lib/paletaDeImpressaoParaCaptura.ts`.
+
+**Nesta tela:** o cabeçalho das colunas **se repete** no topo de todas as páginas — a tela tem
+uma tabela só, e ela é o corpo do relatório. ⚠️ **Não teve PDF gerado na entrega de 09-04**:
+a mudança foi aplicada e verificada por script e por `tsc`, mas só Estoque e Lucratividade
+foram exercitados de ponta a ponta.

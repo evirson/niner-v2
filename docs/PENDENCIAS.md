@@ -170,6 +170,68 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 
 ---
 
+## 🎨 Aberto em 2026-09-04 — o que a sessão de interface deixou por medir
+
+> Sessão de **interface apenas**: nenhuma migration, nenhuma mudança de backend, a suíte Java não
+> foi tocada. `tsc -b` limpo em 26 arquivos, 4 telas abertas no navegador, 3 PDFs gerados e medidos
+> pixel a pixel. História completa em `docs/PROGRESSO.md` (2026-09-04); mecanismo em
+> `docs/telas/relatorio-vendas.md`.
+
+### 🟢 88. Nove dos onze relatórios não tiveram o PDF gerado
+
+A paleta de impressão (preto no branco) e o cabeçalho de coluna repetido foram aplicados nos **11**
+módulos `lib/*Captura.ts`, verificados um a um por script e por `tsc -b`. Mas só **dois** foram
+exercitados de ponta a ponta: **Relatório de Estoque** (13 páginas, cabeçalho em 12, cores medidas
+no arquivo) e **Lucratividade** (1 página, sem repetição, intacto).
+
+**Faltam:** Vendas, Comissões, Contas a Pagar, Contas a Receber, Ordens de Serviço, Movimentação de
+Produtos (Kardex), DRE, Fluxo de Caixa e Diferenças de Estoque.
+
+⚠️ **Por que não é formalidade:** cor e paginação de PDF **não passam por `tsc` nem pela suíte** —
+é exatamente a família de defeito que só aparece gerando o arquivo. Ver
+[[feedback_abrir_a_tela_acha_o_que_a_suite_nao_ve]].
+
+**Como verificar rápido, sem renderizar:** gere o PDF e conte os operadores `Do` —
+`{"I0":N,"I1":N-1}` prova cabeçalho da 2ª à N-ésima página. Nos relatórios em **seções** (DRE, Fluxo
+de Caixa) o esperado é **não** haver `I1`: eles têm mais de um `<thead>` e a repetição fica
+desligada de propósito.
+
+### 🟢 89. O caso "tabela curta em relatório longo" não foi exercitado
+
+A segunda guarda do cabeçalho repetido (`fimCorpoPx` — a página só leva cabeçalho se **começar
+dentro** do corpo da tabela) existe porque a Lucratividade tem uma tabela curta mais gráficos. Só
+que, com os dados de teste, ela **coube numa página** — então a guarda foi escrita, revisada e
+**nunca chegou a decidir nada**.
+
+**O que exercitaria:** um relatório com tabela curta e várias páginas de conteúdo depois dela. Se a
+guarda estiver errada, o sintoma é um cabeçalho de colunas boiando sobre um gráfico.
+
+### 🔵 90. `admin/` e `site/` continuam na paleta antiga (decisão de escopo)
+
+A troca da paleta clara foi **só no `web/`**, escolha dele quando perguntei o escopo. Consequências
+hoje:
+
+- O **backoffice** e o **site público** seguem verde-petróleo enquanto o ERP é azul.
+- O `site/` é o *golden file* da spec §3.7 (`docs/padroes/`), então **a spec está desalinhada do
+  produto de propósito**. Quem for propagar mexe em `admin/src/styles.css` (26 hex),
+  `site/src/styles/*.css` e no golden file.
+- ⚠️ O `<meta name="darkreader-lock">` também **só existe no `web/`** — se alguém reclamar do
+  backoffice escuro com tema claro, é a mesma causa e a mesma correção de uma linha.
+
+### 🔵 91. Tema escuro ficou com a identidade antiga (decisão dele)
+
+Botão primário e links são **azuis no claro** e **verde-água (`#4fbdb2`) no escuro**. Foi apontado
+antes de aplicar, com o custo de alinhar (`--accent` e `--accent-rgb` nos dois blocos escuros, ~4
+linhas), e ele optou por manter o escuro intacto. **Não "consertar" sem falar com ele** — está
+registrado no comentário do `styles.css`.
+
+### 🟢 92. `.pdv-flash` com contraste 3.18 (pré-existente, não corrigido)
+
+O aviso verde de "item lançado" do PDV tem contraste **3.18** contra o mínimo de 4.5 — mas já era
+**3.16** antes da paleta nova, então **não é regressão**. Deixado como estava porque o pedido era
+paleta, não correção. Trocar `color: #08210f` por branco leva a **5.34**.
+
+
 ## 🔴 Aberto em 2026-08-31 (fechamento) — o que precisa de VOCÊ
 
 ### 75. ✅ A NFC-e VOLTOU A EMITIR — **FECHADO em 2026-09-01** (ele redigitou o CSC)
@@ -1835,6 +1897,20 @@ não somar mais um item.
 ---
 
 ## 📋 RESUMO PARA A PRÓXIMA SESSÃO — agrupado por dono (2026-09-01, fim do dia)
+
+> ⚠️ **Acrescentado em 2026-09-04** (sessão de interface, sem backend): o resumo abaixo é de 09-01 e
+> **não** cobre os itens **88 a 92**, criados hoje. Em uma linha cada:
+>
+> - 🟢 **88** — 9 dos 11 relatórios receberam a paleta de impressão e o cabeçalho repetido **sem ter
+>   o PDF gerado**. Só Estoque e Lucratividade foram medidos.
+> - 🟢 **89** — a guarda `fimCorpoPx` (cabeçalho só enquanto a página está dentro da tabela) nunca
+>   chegou a decidir nada, porque a Lucratividade coube numa página.
+> - 🔵 **90** — `admin/` e `site/` seguem na paleta antiga (escopo dele foi só o `web/`), o que
+>   deixa o *golden file* da spec §3.7 desalinhado de propósito.
+> - 🔵 **91** — tema escuro ficou verde-petróleo enquanto o claro virou azul: **decisão dele**, com
+>   a consequência apontada. Não mexer sem falar.
+> - 🟢 **92** — `.pdv-flash` com contraste 3.18; **pré-existente** (era 3.16), não corrigido porque
+>   o pedido era paleta.
 
 > ⚠️ **Apresentar assim, agrupado — nunca as ~29 linhas cruas.** Ele já disse *"TA MUITO CONFUSO"*.
 

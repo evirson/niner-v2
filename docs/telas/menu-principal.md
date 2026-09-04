@@ -265,3 +265,87 @@ Então vejo "Nenhuma tela encontrada para …", sem resultado algum
 | `web/src/components/SeletorTema.tsx` | **novo (2026-08-14)** — menu Claro/Escuro/Automático do cabeçalho |
 | `web/src/lib/tema.ts` | **novo (2026-08-14)** — leitura/gravação em `localStorage` e escrita do `data-theme` |
 | `web/index.html` | **(2026-08-14)** script inline no `<head>` que aplica o tema antes da primeira pintura (anti-flash) |
+
+---
+
+**Revisão 2026-09-04 — o tema CLARO virou azul; o ESCURO ficou como estava.**
+
+Pedido do dono do produto a partir de um template do Figma Community (*ERP Dashboard*), do qual ele
+disse ter gostado das cores. A escolha foi feita num **piloto reversível** (`?paleta=a|b|hoje`, dois
+blocos temporários no `styles.css` mais um alternador no `main.tsx`, tudo removido depois) que
+mostrava a mesma tela em três versões: o azul do template, uma versão só com as neutras suavizadas
+mantendo o verde-petróleo, e a paleta de então. Ele escolheu o azul olhando o PDV.
+
+**A paleta clara agora** (blocos `:root` e `:root[data-theme='light']` do `web/src/styles.css`, que
+são cópias literais um do outro e precisam andar juntos):
+
+| Token | Valor | Origem |
+|---|---|---|
+| `--ground` | `#d8e9f0` | `Fifth` do template |
+| `--surface` | `#ffffff` | `White` |
+| `--surface-2` | `#eaf1f6` | derivado |
+| `--field-bg` | `#dbe7f0` | ⚠️ **não** é o `Fifth` puro — ver abaixo |
+| `--ink` / `--field-text` | `#001446` | `Primary` |
+| `--ink-muted` / `--label-color` | `#4a6280` | derivado |
+| `--accent` | `#02437b` | `Second` |
+| `--line` / `--line-strong` | `#c5dce7` / `#8dc2d5` | derivado / `Fourth` escurecido |
+| `--danger` / `--sucesso` / `--info` / `--aviso` | `#b3261e` / `#1b7a4b` / `#026b93` / `#b45309` | ⚠️ **escolhidos aqui** |
+
+⚠️ **O template não tem cor de estado.** São cinco tons do mesmo azul mais branco (`Primary
+#001446` · `Second #02437B` · `Third #028BBF` · `Fourth #98CBDC` · `Fifth #D8E9F0`) — ele não
+precisa de erro/sucesso/aviso porque as telas dele não têm nenhum desses estados. O Nainer tem
+badges, toasts e tarjas, então as quatro cores foram escolhidas para conviver com o azul.
+
+⚠️ **Dois desvios deliberados do template, ambos por medição de contraste** (os 13 pares críticos
+foram calculados antes de escrever qualquer hex, e a paleta nova empata ou supera a anterior em
+todos):
+
+- `--field-bg`: o `Fifth` puro sobre card branco dá **1.16** e o campo desaparece contra o card —
+  o produto segue o *golden file* "campos cinza" (§3.7). `#dbe7f0` dá **1.26**, exatamente a mesma
+  separação campo/card que a paleta anterior entregava.
+- `--line-strong`: o `Fourth` puro dá **1.76** contra os **1.89** anteriores, e borda mais fraca faz
+  a tabela densa perder a grade.
+
+🔵 **Decisão dele: o tema escuro NÃO acompanhou.** Foi apontado que botão primário e links ficariam
+azuis no claro e verde-água (`#4fbdb2`) no escuro — o mesmo produto com duas identidades — e que
+levar só o `--accent` para o escuro custaria ~4 linhas. Ele optou por manter o escuro intacto. A
+consequência está escrita no comentário do próprio `styles.css`, não só aqui.
+
+⚠️ **Escopo: só o `web/`.** `admin/` e `site/` continuam na paleta anterior. Como o `site/` é o
+*golden file* da spec §3.7, a spec está desalinhada **de propósito** até alguém decidir propagar.
+
+⚠️ **A paleta clara vive em três lugares**, e um deles deixou de espelhá-la: `:root` e
+`:root[data-theme='light']` no `styles.css` continuam idênticos entre si, mas
+`lib/paletaDeImpressaoParaCaptura.ts` (o PDF dos relatórios) passou a ter **paleta própria de
+papel** — preto no branco. Ver `docs/telas/relatorio-vendas.md`.
+
+---
+
+**⛔ A extensão Dark Reader e o `darkreader-lock` (2026-09-04).**
+
+Até esta data, `styles.css` registrava que o produto **não** vencia a extensão Dark Reader: ela
+injeta as próprias folhas e reescreve os tokens, então quem a tivesse ativa via o ERP escuro mesmo
+com o tema claro selecionado. **Isso deixou de ser verdade.**
+
+O sintoma apareceu logo depois da paleta nova, e foi relatado como *"você bagunçou o tema light"*.
+A medição na página mostrou o oposto:
+
+```
+niner_tema: "claro"    data-theme: "light"
+--ground: #d8e9f0                      ← token correto
+body pintado: rgb(23, 49, 60)          ← não é nosso
+9 tags <style class="darkreader…">
+--darkreader-neutral-background: #181a1b
+```
+
+⚠️ **A extensão só age quando a página está clara.** Enquanto o ERP estava no tema escuro ela ficava
+quieta — por isso o problema nasceu junto com a paleta nova e pareceu causado por ela.
+
+⛔ **Remover as folhas em runtime não resolve:** medido, ela reinjeta 8 em segundos. A saída é
+`<meta name="darkreader-lock">` no `web/index.html` — o mecanismo oficial para a página declarar que
+gerencia o próprio tema, o que o Nainer faz (tem seletor na topbar). Depois da tag: **0 folhas** e
+`body` em `rgb(216,233,240)`.
+
+⚠️ **No PDF a defesa é outra e continua necessária** (`removerDarkReaderDoClone`): o clone do
+html2canvas é nosso e não é reinjetado, e relatório que sai da máquina para o contador não pode
+depender de a extensão do lojista estar atualizada.

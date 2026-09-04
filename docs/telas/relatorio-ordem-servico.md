@@ -109,7 +109,7 @@ reprova o build se escapar.
 
 ## 9. PDF
 
-Captura visual (html2canvas + jsPDF), padrão de `relatorio-vendas.md`: `temaClaroParaCaptura` +
+Captura visual (html2canvas + jsPDF), padrão de `relatorio-vendas.md`: `paletaDeImpressaoParaCaptura` (renomeado em 2026-09-04) +
 `aguardarPintura` compartilhados, `[data-sem-impressao]` no aviso de atualização.
 
 ---
@@ -146,3 +146,17 @@ Hoje o campo é **nulo** quando não há medida (só o nulo vira `—`), com **4
 escolhe a unidade: minutos, horas ou dias. Quem escolhe a unidade é a apresentação, e ela não pode
 recuperar o que o arredondamento já jogou fora. O teste tem o **par**: nulo quando não há × maior
 que zero para uma OS de 1 minuto — a duração exata que o arredondamento antigo matava.
+
+---
+
+**Revisão 2026-09-04 — PDF preto no branco e cabeçalho de coluna repetido.**
+O mecanismo é comum aos 11 relatórios e está descrito em `docs/telas/relatorio-vendas.md`
+(arquivo-padrão de tela de relatório): a captura deixou de reproduzir o **tema claro do
+produto** e passou a declarar uma **paleta de impressão própria** (fundo `#ffffff`, texto
+`#000000`, cabeçalho de tabela `#f2f2f2`), mantendo coloridas só as cores de série, que são
+informação do gráfico. O módulo virou `lib/paletaDeImpressaoParaCaptura.ts`.
+
+**Nesta tela:** o cabeçalho das colunas **se repete** no topo de todas as páginas — a tela tem
+uma tabela só, e ela é o corpo do relatório. ⚠️ **Não teve PDF gerado na entrega de 09-04**:
+a mudança foi aplicada e verificada por script e por `tsc`, mas só Estoque e Lucratividade
+foram exercitados de ponta a ponta.

@@ -271,3 +271,19 @@ pagar nos próximos 90 dias. A pergunta certa não é *"já gerou?"*, é *"o per
 (UTC−4), a venda em dinheiro das 23h30 caía no bucket do dia seguinte: o "Saldo real atual" mostrava
 menos do que a gaveta tem e a **Diferença acusava divergência inexistente** — o oposto do que a
 conciliação existe para fazer. Vale para AM/RO/RR/MT/MS (1 h/dia) e AC (2 h).
+
+---
+
+**Revisão 2026-09-04 — PDF preto no branco e cabeçalho de coluna repetido.**
+O mecanismo é comum aos 11 relatórios e está descrito em `docs/telas/relatorio-vendas.md`
+(arquivo-padrão de tela de relatório): a captura deixou de reproduzir o **tema claro do
+produto** e passou a declarar uma **paleta de impressão própria** (fundo `#ffffff`, texto
+`#000000`, cabeçalho de tabela `#f2f2f2`), mantendo coloridas só as cores de série, que são
+informação do gráfico. O módulo virou `lib/paletaDeImpressaoParaCaptura.ts`.
+
+⛔ **Nesta tela o cabeçalho NÃO se repete, de propósito:** o relatório é feito de **seções**,
+cada uma com o próprio `<thead>`. Repetir o cabeçalho da primeira seção sobre a página que
+mostra a terceira rotularia as colunas com nomes que não são delas — rótulo errado é pior que
+rótulo nenhum. A guarda é automática (mais de um `<thead>` no alvo desliga a repetição).
+Fazer isso funcionar exigiria decidir *qual* cabeçalho vale em cada faixa da imagem, que é
+outro problema; ninguém pediu. **Non-goal declarado.**

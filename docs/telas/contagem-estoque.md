@@ -222,3 +222,13 @@ própria chave. `['balanco-diferencas']` — lida por **duas** telas, Diferença
 Balanço — nunca era invalidada. O `staleTime: 0` limitava o estrago, mas o modal do Efetivar Balanço
 podia afirmar "N produtos" com o N antigo, logo antes de gravar movimento de estoque. As duas telas
 passaram a usar o helper `invalidarBalanco`, que invalida as duas chaves.
+
+---
+
+**Revisão 2026-09-04 — PDF preto no branco e cabeçalho de coluna repetido.**
+O PDF das diferenças (`lib/estoqueDiferencasCaptura.ts`) segue o mecanismo comum aos 11
+relatórios, descrito em `docs/telas/relatorio-vendas.md`: paleta de **impressão** própria (fundo
+`#ffffff`, texto `#000000`, cabeçalho de tabela `#f2f2f2`), com as cores de série mantidas, e o
+nome das colunas repetido no topo de todas as páginas. ⚠️ **Não teve PDF gerado na entrega de
+09-04** — a mudança foi verificada por script e por `tsc`, mas só Estoque e Lucratividade foram
+exercitados de ponta a ponta.

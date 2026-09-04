@@ -147,3 +147,18 @@ Nenhuma bloqueante.
 O botão de fechar do popup obrigatório de filtros usava `navigate('/')`, empilhando histórico.
 Passou a `navigate(-1)`, alinhado com `RelatorioDre` e `FluxoCaixa`. Mesma correção em Vendas,
 Comissões, Contas a Receber e Movimentação de Produtos.
+
+---
+
+**Revisão 2026-09-04 — PDF preto no branco e cabeçalho de coluna repetido.**
+O mecanismo é comum aos 11 relatórios e está descrito em `docs/telas/relatorio-vendas.md`
+(arquivo-padrão de tela de relatório): a captura deixou de reproduzir o **tema claro do
+produto** e passou a declarar uma **paleta de impressão própria** (fundo `#ffffff`, texto
+`#000000`, cabeçalho de tabela `#f2f2f2`), mantendo coloridas só as cores de série, que são
+informação do gráfico. O módulo virou `lib/paletaDeImpressaoParaCaptura.ts`.
+
+**Nesta tela:** o cabeçalho das colunas **se repete** no topo de todas as páginas. ⭐ Foi o
+relatório usado para validar o mecanismo, com PDF gerado e medido: **13 páginas**, duas
+imagens embutidas (`2638x20590` do conteúdo e `2638x63` da faixa do cabeçalho) e os
+operadores de desenho em `{"I0":13,"I1":12}` — conteúdo nas 13, cabeçalho nas páginas 2 a 13.
+Cores medidas no arquivo: topo `#ffffff`, card `#ffffff`, cabeçalho `#f2f2f2`.
