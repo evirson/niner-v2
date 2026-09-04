@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
+import { aguardarPintura } from '../../lib/paletaDeImpressaoParaCaptura'
 import { useNavigate } from 'react-router-dom'
 import {
   Bar,
@@ -298,7 +298,7 @@ export default function RelatorioVendas() {
    *  `gerandoPdf` está true (renderizada dentro de `topoRef`, então a própria captura do
    *  html2canvas a pega junto). Por isso o `aguardarPintura()` antes de capturar: sem ele o
    *  html2canvas roda contra o DOM antigo, sem a seção.
-   *  ⚠️ A espera vive em `lib/temaClaroParaCaptura` desde 2026-08-31 — era uma cópia local em
+   *  ⚠️ A espera vive em `lib/paletaDeImpressaoParaCaptura` desde 2026-08-31 — era uma cópia local em
    *  **dez** telas, e todas travavam o PDF em aba oculta (ver o javadoc de lá). */
 
   const handleGerarPdf = async () => {

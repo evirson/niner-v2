@@ -15,7 +15,7 @@ import {
   type FiltrosRelatorioOrdensServico,
 } from '../../lib/relatorioOrdensServico'
 import { gerarPdfCapturaRelatorioOrdensServico } from '../../lib/relatorioOrdensServicoCaptura'
-import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
+import { aguardarPintura } from '../../lib/paletaDeImpressaoParaCaptura'
 import FiltrosComissoesModal, { FILTROS_VAZIOS, type FiltrosTexto } from './FiltrosComissoesModal'
 
 const COLUNAS: Array<{ chave: ColunaOrdenacaoOrdens; rotulo: string; alinhamento?: 'right' }> = [

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
+import { aguardarPintura } from '../../lib/paletaDeImpressaoParaCaptura'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'

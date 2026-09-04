@@ -1,6 +1,6 @@
 import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
-import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
+import { aguardarPintura } from '../../lib/paletaDeImpressaoParaCaptura'
 import { Fragment, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'

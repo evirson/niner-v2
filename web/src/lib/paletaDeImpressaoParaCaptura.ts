@@ -1,8 +1,27 @@
 /**
- * Força o **tema claro** no documento clonado que o html2canvas renderiza — usado por todo
- * `lib/*Captura.ts` (relatórios em PDF).
+ * Força a **paleta de impressão** no documento clonado que o html2canvas renderiza — usado por
+ * todo `lib/*Captura.ts` (relatórios em PDF).
  *
- * ## Por que existe (2026-08-26)
+ * ## O que é a paleta de impressão (2026-09-04)
+ *
+ * **Fundo branco e texto preto, independente do tema da tela** — decisão do dono do produto: o PDF
+ * do relatório vai para impressora laser ou jato de tinta, e fundo colorido gasta toner numa
+ * página que é quase toda fundo. Antes daqui, a captura reproduzia o **tema claro** do produto, e
+ * o PDF saía com o fundo da marca (na época bege `#f5f4f0`, hoje azul `#d8e9f0`).
+ *
+ * ⭐ **As cores de SÉRIE continuam coloridas** — `--accent`, `--danger`, `--sucesso`, `--aviso` e
+ * `--info`. Elas não são decoração: o Fluxo de Caixa distingue entrada de saída por
+ * `--sucesso` × `--danger`, e um gráfico com duas séries cinza-idênticas perde a informação que
+ * justifica o gráfico. Nos relatórios essas cores aparecem como barra e como fundo com 12% de
+ * alpha (`.relatorio-composicao-card.destaque`) — ambos imprimem com pouco toner. Os fundos
+ * sólidos de `--accent` (paginação ativa, linha selecionada, teclas do PDV) não estão na área
+ * capturada.
+ *
+ * ⚠️ Por isso a paleta aqui é **literal e própria**, e não mais lida de `:root[data-theme='light']`
+ * como era até 2026-09-04: ela deixou de ser um espelho do tema claro e passou a ser uma decisão
+ * independente. Espelhá-lo agora traria a cor da marca de volta para dentro do papel.
+ *
+ * ## Por que declarar, e não só trocar o atributo (2026-08-26)
  *
  * Relatório impresso não pode sair no tema escuro: gasta tinta, fica ilegível em papel comum e
  * não é o que o lojista manda para o contador. Cada módulo de captura já fazia
@@ -17,45 +36,47 @@
  * uma folha injetada depois — para o relatório inteiro sair escuro **sem nenhum erro**. Medido: um
  * clone com `data-theme='dark'` produz `--surface: #1a2225` e cards pretos.
  *
- * ⭐ A saída é não depender da cascata: além do atributo, **declarar a paleta clara direto no
- * clone com `!important`**. Medido nos dois piores casos — clone forçado em `data-theme='dark'` e
- * clone sem atributo nenhum com o SO em escuro — os dois passaram a render `--surface: #ffffff`.
- *
- * ## Por que os valores vêm do CSS, e não de uma cópia
- *
- * A paleta é lida de `:root[data-theme='light']` em `styles.css`, que continua sendo a **única**
- * fonte da verdade — uma cópia literal aqui divergiria no dia em que alguém ajustasse uma cor lá e
- * não aqui, e o PDF passaria a ter uma paleta própria que ninguém escolheu. A cópia literal existe
- * só como **fallback** para o caso de as regras não serem legíveis (`cssRules` lança em folha
- * cross-origin).
+ * ⭐ A saída é não depender da cascata: além do atributo, **declarar a paleta direto no clone com
+ * `!important`**. Medido nos dois piores casos — clone forçado em `data-theme='dark'` e clone sem
+ * atributo nenhum com o SO em escuro — os dois passaram a render `--surface: #ffffff`.
  *
  * ⚠️ Isto **não vence a extensão Dark Reader**, que reescreve os tokens no documento do usuário —
  * é comportamento da extensão, não do produto (ver `styles.css`, comentário de `color-scheme`).
  */
 
-/** Espelho de `:root[data-theme='light']` (`styles.css`). Só entra em uso se o CSS não for legível. */
-const PALETA_CLARA_FALLBACK = [
+/**
+ * A paleta com que todo relatório é fotografado. Papel: fundo branco, texto preto, linha cinza —
+ * e as cores de série preservadas, porque são informação (ver o cabeçalho do arquivo).
+ *
+ * ⚠️ Não é espelho de nada em `styles.css`: mudar a cor da marca **não** deve mexer aqui.
+ */
+const PALETA_IMPRESSAO = [
   'color-scheme:light',
-  '--ground:#f5f4f0',
+  // Fundos: tudo branco. O cabeçalho da tabela (`--surface-2`) fica num cinza neutro de 5% —
+  // sem ele a faixa some no meio de uma tabela longa, e 5% de cinza é toner desprezível.
+  '--ground:#ffffff',
   '--surface:#ffffff',
-  '--surface-2:#edece6',
-  '--field-bg:#e4e6e2',
-  '--field-text:#20262a',
-  '--label-color:#5c6660',
-  '--ink:#20262a',
-  '--ink-muted:#5c6660',
-  '--accent:#1f6f6b',
+  '--surface-2:#f2f2f2',
+  '--field-bg:#ffffff',
+  // Texto: preto no corpo, cinza escuro no secundário (rótulo de coluna, eixo de gráfico).
+  '--field-text:#000000',
+  '--label-color:#333333',
+  '--ink:#000000',
+  '--ink-muted:#333333',
+  // Linhas: cinza neutro, não a cor da marca.
+  '--line:#cccccc',
+  '--line-strong:#8a8a8a',
+  // ⭐ Cores de série — MANTIDAS de propósito. Zerar aqui apaga a informação do gráfico.
+  '--accent:#02437b',
   '--accent-ink:#ffffff',
-  '--line:#dee2dc',
-  '--line-strong:#b9beb5',
-  '--danger:#a63d29',
-  '--info:#3060c0',
-  '--sucesso:#217a33',
+  '--danger:#b3261e',
+  '--info:#026b93',
+  '--sucesso:#1b7a4b',
   '--aviso:#b45309',
-  '--accent-rgb:31, 111, 107',
+  '--accent-rgb:2, 67, 123',
   '--accent-ink-rgb:255, 255, 255',
-  '--danger-rgb:166, 61, 41',
-  '--sucesso-rgb:33, 122, 51',
+  '--danger-rgb:179, 38, 30',
+  '--sucesso-rgb:27, 122, 75',
   '--aviso-rgb:180, 83, 9',
 ]
   .map((d) => `${d} !important;`)
@@ -160,36 +181,48 @@ function regrasDoGrafico(declaracoes: string): string {
 }
 
 /**
- * Lê as declarações de `:root[data-theme='light']` das folhas da página, já com `!important`.
- * Devolve `null` se não achar — aí vale o fallback.
+ * Tira do clone o que a extensão **Dark Reader** injetou na página do usuário.
+ *
+ * ## Por que (2026-09-04, medido num PDF real)
+ *
+ * O dono do produto trocou para o tema claro e o relatório saiu com **fundo preto**. Medido no
+ * JPEG embutido no PDF: `#18191b` — que é exatamente o valor de `--darkreader-neutral-background`
+ * na página dele. Não era o tema escuro do produto (`#12181a` / `#1a2225`), era a extensão.
+ *
+ * ⚠️ **Não é um caso de laboratório, e o estrago é maior no papel que na tela.** Na tela, quem
+ * instalou a extensão escolheu ver tudo escuro e sabe disso. O relatório em PDF é outra coisa: ele
+ * sai da máquina — vai para o contador, para o banco, para a impressora — e **ninguém escolheu**
+ * que aquele arquivo fosse preto. Uma página de relatório é quase toda fundo; impressa em laser ou
+ * jato de tinta, isso é um cartucho por relatório.
+ *
+ * ⭐ Por que dá para vencer aqui e não na tela: o html2canvas renderiza um **clone**, e o clone é
+ * nosso. Na página real a extensão reinjeta o que for removido (é o trabalho dela, e o usuário
+ * pediu por isso ao instalá-la) — por isso `styles.css` diz que o produto não vence o Dark Reader.
+ * No clone, que vive só o tempo da captura, remover é definitivo.
+ *
+ * ⚠️ Remove as duas metades: as folhas `<style class="darkreader…">` (9 na medição) **e** o que
+ * ela escreve no `style` inline de cada elemento. Só as folhas não bastaria — ela marca elementos
+ * com `data-darkreader-inline-*` e troca a cor por `var(--darkreader-inline-*)`; apagar só a folha
+ * que define essas variáveis deixaria o `var()` sem valor, o que é pior que a cor errada.
  */
-function lerPaletaClaraDoCss(): string | null {
-  try {
-    for (const folha of Array.from(document.styleSheets)) {
-      let regras: CSSRuleList
-      // Folha de outra origem lança ao ler `cssRules`; é esperado, só pula.
-      try {
-        regras = folha.cssRules
-      } catch {
-        continue
-      }
-      for (const regra of Array.from(regras)) {
-        const estilo = (regra as CSSStyleRule).style
-        const seletor = (regra as CSSStyleRule).selectorText
-        // O navegador serializa com aspas duplas (`[data-theme="light"]`); normaliza antes de comparar.
-        if (!estilo || !seletor || !seletor.replace(/"/g, "'").includes("[data-theme='light']")) continue
-        let saida = ''
-        for (let i = 0; i < estilo.length; i++) {
-          const propriedade = estilo.item(i)
-          saida += `${propriedade}:${estilo.getPropertyValue(propriedade)} !important;`
-        }
-        if (saida) return saida
+function removerDarkReaderDoClone(doc: Document): void {
+  for (const no of Array.from(doc.querySelectorAll('style, link'))) {
+    // `className` de SVG é SVGAnimatedString, não string — normaliza antes de testar.
+    if (String((no as HTMLElement).className ?? '').includes('darkreader')) no.remove()
+  }
+  for (const no of Array.from(doc.querySelectorAll<HTMLElement>('[style]'))) {
+    const estilo = no.style
+    for (const propriedade of Array.from(estilo)) {
+      // Cobre as duas formas: a variável (`--darkreader-inline-bgcolor`) e a propriedade que a
+      // consome (`background-color: var(--darkreader-inline-bgcolor)`).
+      if (propriedade.includes('darkreader') || estilo.getPropertyValue(propriedade).includes('--darkreader')) {
+        estilo.removeProperty(propriedade)
       }
     }
-  } catch {
-    // Qualquer surpresa aqui não pode impedir a geração do PDF — o fallback cobre.
+    for (const atributo of Array.from(no.attributes)) {
+      if (atributo.name.startsWith('data-darkreader')) no.removeAttribute(atributo.name)
+    }
   }
-  return null
 }
 
 /**
@@ -199,11 +232,13 @@ function lerPaletaClaraDoCss(): string | null {
  * responde dentro do clone (código que inspecione o clone continua vendo o tema claro), e o
  * `<style>` é o que garante o resultado quando o atributo não basta.
  */
-export function forcarTemaClaroNoClone(doc: Document): void {
+export function forcarPaletaDeImpressaoNoClone(doc: Document): void {
+  // Antes de tudo: com as folhas da extensão ainda no clone, nem `!important` resolve — medido.
+  removerDarkReaderDoClone(doc)
   doc.documentElement.setAttribute('data-theme', 'light')
-  const declaracoes = lerPaletaClaraDoCss() ?? PALETA_CLARA_FALLBACK
+  const declaracoes = PALETA_IMPRESSAO
   const estilo = doc.createElement('style')
-  estilo.setAttribute('data-origem', 'captura-pdf-tema-claro')
+  estilo.setAttribute('data-origem', 'captura-pdf-paleta-impressao')
   estilo.textContent =
     `:root{${declaracoes}}` +
     REGRA_SEM_IMPRESSAO +

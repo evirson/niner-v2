@@ -986,7 +986,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Escolha "Totalizar Por" para agrupar a grid final (por data, cliente, vendedor, operador de caixa ou empresa) — clique numa linha agrupada para ver as vendas daquele grupo.',
       '"Não Totalizar" já mostra a lista de vendas do período diretamente, sem agrupar, em ordem cronológica (data/hora da venda), já com a linha de total no rodapé.',
       '"Gerar PDF" baixa a tela como está (com os gráficos desenhados) em PDF: a 1ª página traz os filtros aplicados, o título e a numeração/data de geração repetem no topo de todas as páginas, e o rodapé de cada página mostra a empresa logada e "Nainer ERP" — a grid de vendas sempre começa numa página nova, com total no fim.',
-      'O PDF sai sempre em tema claro (fundo branco), mesmo com o sistema no tema escuro — economiza tinta na impressão.',
+      'O PDF sai sempre com fundo branco e letra preta, qualquer que seja o tema da tela — é o formato para impressora laser ou jato de tinta, e fundo colorido gasta tinta numa página que é quase toda fundo. Só as cores dos gráficos são mantidas, porque é por elas que se distingue uma série da outra.',
+      'O nome das colunas se repete no topo de todas as páginas, para você não precisar voltar à primeira para saber de que coluna é cada número.',
     ],
     errosComuns: [
       'Operadores sempre veem só a própria empresa da sessão, mesmo com mais de uma selecionada.',
@@ -1002,6 +1003,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'A grid traz uma linha por funcionário (por empresa, se houver mais de uma) com valor da venda, valor da devolução, valor líquido, % de comissão e valor da comissão.',
       'Com mais de uma empresa no resultado, a grid mostra um subtotal logo depois das linhas de cada empresa, além do total geral no fim.',
       '"Gerar PDF" captura a tela como está, com filtros aplicados na 1ª página e cabeçalho/rodapé repetidos em todas.',
+      'O nome das colunas se repete no topo de todas as páginas, e o PDF sai com fundo branco e letra preta qualquer que seja o tema da tela — formato de impressora, não de monitor.',
     ],
     errosComuns: [
       '% de comissão vem do cadastro de Funcionário — se aparecer 0%, o funcionário não tem percentual configurado.',
@@ -1018,6 +1020,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'O bloco "Movimento do Período" conta abertas, concluídas, faturadas e canceladas, mais o valor faturado, o desconto concedido, o ticket médio e o tempo médio.',
       'A grid traz uma linha por executor com o nº de OS, o valor de serviços, o de peças, o total e o tempo médio; com mais de uma empresa aparece subtotal por empresa.',
       '"Gerar PDF" captura a tela como está, com filtros aplicados na 1ª página e cabeçalho/rodapé repetidos em todas.',
+      'O nome das colunas se repete no topo de todas as páginas, e o PDF sai com fundo branco e letra preta qualquer que seja o tema da tela — formato de impressora, não de monitor.',
     ],
     errosComuns: [
       'Os quatro contadores do Movimento NÃO somam: cada um conta pela sua própria data. Uma OS aberta no mês passado e concluída neste aparece só em "Concluídas".',
@@ -1042,6 +1045,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Uma coluna "Recebimento" vazia significa que a parcela ainda está em aberto.',
       'Com mais de uma empresa no resultado, aparece um subtotal logo depois das linhas de cada empresa, além do total geral no fim.',
       '"Gerar PDF" captura a tela como está, com filtros aplicados na 1ª página e cabeçalho/rodapé repetidos em todas.',
+      'O nome das colunas se repete no topo de todas as páginas, e o PDF sai com fundo branco e letra preta qualquer que seja o tema da tela — formato de impressora, não de monitor.',
     ],
     errosComuns: [
       'Só aparecem parcelas de Cartão Débito, Cartão Crédito e Crediário — À Vista e Vale-Mercadoria nascem sempre quitados na hora, não entram aqui.',
@@ -1063,6 +1067,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'A grid traz uma linha por conta, com as três datas, o valor da conta, o já pago e o que falta pagar.',
       'Com mais de uma empresa no resultado, aparece um subtotal logo depois das linhas de cada empresa, além do total geral no fim.',
       '"Gerar PDF" captura a tela como está, com os filtros aplicados na 1ª página.',
+      'O nome das colunas se repete no topo de todas as páginas, e o PDF sai com fundo branco e letra preta qualquer que seja o tema da tela — formato de impressora, não de monitor.',
     ],
     errosComuns: [
       'Uma conta só é considerada PAGA quando tem data de pagamento — a marca "Documento Pago" sozinha não basta. Quando as duas discordam, a linha vem marcada como divergente pra você conferir.',
@@ -1097,6 +1102,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Diferença em verde é sobra (contado maior que o estoque); em vermelho é falta.',
       'Clique no título de qualquer coluna pra ordenar.',
       '"Gerar PDF" captura a grid como está, com a empresa da contagem em destaque no topo.',
+      'O nome das colunas se repete no topo de todas as páginas, e o PDF sai com fundo branco e letra preta qualquer que seja o tema da tela — formato de impressora, não de monitor.',
     ],
     errosComuns: [
       'Um produto em estoque que nunca foi lido também aparece aqui (contagem tratada como 0) — não é bug, é pra não passar batido.',
@@ -1142,6 +1148,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Nos modelos Sintético e Analítico, cada empresa incluída no filtro vira uma coluna de quantidade própria, além da coluna de total.',
       'Clique no título de qualquer coluna pra ordenar — por padrão a lista vem por descrição do produto.',
       '"Gerar PDF" captura a grid como está, com os filtros aplicados no topo.',
+      'O nome das colunas se repete no topo de todas as páginas, e o PDF sai com fundo branco e letra preta qualquer que seja o tema da tela — formato de impressora, não de monitor.',
     ],
     errosComuns: [
       'Um produto sem nenhuma variação cadastrada nunca aparece (não tem como ter estoque).',

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
+import { aguardarPintura } from '../../lib/paletaDeImpressaoParaCaptura'
 import { Fragment, useRef, useState } from 'react'
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import AjudaDaTela from '../../components/AjudaDaTela'
