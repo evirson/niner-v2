@@ -495,4 +495,82 @@ class CotaVendasTest {
                 .andExpect(jsonPath("$.empresas.length()").value(2))
                 .andExpect(jsonPath("$.empresas[?(@.razaoSocial == 'SO DO TENANT B')]").exists());
     }
+
+    /**
+     * ⭐ <b>Corrida real: duas vendas disputando o ÚLTIMO slot da cota.</b>
+     *
+     * <p>Com cota 2 + tolerância 1 e o contador já em 2, sobra exatamente <b>um</b> slot. Duas
+     * vendas simultâneas têm de resultar numa aceita e uma recusada.
+     *
+     * <p><b>Por que isso importa e por que só aparece concorrente.</b> A cota é a única dimensão
+     * cobrada do lojista (ADR-015). Se as duas passassem, o tenant venderia além do que o plano
+     * dele permite — e o defeito é invisível em teste sequencial: "checar depois incrementar"
+     * passa em qualquer ordem quando as chamadas não se cruzam. É justamente por isso que
+     * {@code LimiteVendasService.registrarVenda()} faz as duas coisas numa chamada só, com
+     * {@code INSERT … ON CONFLICT DO UPDATE … RETURNING} travando a linha do tenant.
+     *
+     * <p>⚠️ Não mede tempo nem dorme (ver {@code feedback_testes_frageis_por_relogio}): as threads
+     * saem juntas de uma {@link java.util.concurrent.CountDownLatch} e o que se afirma é a
+     * <b>invariante</b> — o contador do mês nunca passa do teto. Se as threads não se cruzarem
+     * numa execução, o teste continua verdadeiro; ele nunca acusa falso.
+     *
+     * <p>⭐ A prova vem do <b>banco</b> (contador e nº de vendas), não do status HTTP: contar 201
+     * deixaria passar um servidor que responde 409 e grava assim mesmo.
+     */
+    @Test
+    void duasVendasSimultaneasNoUltimoSlotDaCotaSoUmaPassa() throws Exception {
+        String token = assinarNovoTenant("cota-corrida");
+        long idTenant = idTenantDe(token);
+        Cenario ce;
+        try (Connection c = abrirConexao(idTenant)) {
+            ce = prepararVenda(token, c, "cota-corrida");
+            definirCota(c, idTenant, 2, 1);
+            // cota(2) + tolerância(1) = 3 no total; com 2 usados sobra UM slot.
+            definirUso(c, idTenant, 2, "date_trunc('month', now())::date");
+        }
+
+        String corpo = corpoVenda(ce);
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var aceitas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        Runnable vender = () -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                int status = mvc.perform(post("/api/v1/pdv/vendas")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(APPLICATION_JSON).content(corpo))
+                        .andReturn().getResponse().getStatus();
+                if (status == 200 || status == 201) {
+                    aceitas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(vender, "venda-cota-1");
+        Thread b = new Thread(vender, "venda-cota-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertThat(falhas).as("nenhuma thread pode explodir por outro motivo").isEmpty();
+        assertThat(aceitas.get()).as("sobrava UM slot: só uma venda pode passar").isEqualTo(1);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(usoAtual(c, idTenant))
+                    .as("o contador do mês não pode passar de cota + tolerância")
+                    .isEqualTo(3);
+            assertThat(totalDeVendas(c, idTenant))
+                    .as("uma venda gravada, não duas — a recusada tem de sair no rollback")
+                    .isEqualTo(1);
+        }
+    }
+
 }

@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-04 (2) — **a grid de lista navega por ↑/↓** em 18 telas, com a linha corrente realçada (`.linha-focada`, translúcida — ⚠️ classe **própria**, porque `.linha-selecionada` já está tomada por 8 telas com três sentidos, inclusive "produto inativo"). O foco **não** sai do campo de busca, e o `scrollIntoView` precisou de `scroll-margin-top`: sem ele a primeira linha ficava **32 px coberta** pelo `<th>` sticky. Antes disso (2026-09-04 — **o tema claro virou azul** (paleta do template *ERP Dashboard*, escolhida por ele num piloto reversível `?paleta=a|b|hoje`; o escuro ficou como estava, decisão dele), o **PDF do relatório virou preto no branco** com paleta de impressão própria (era espelho do tema claro — e o bege da paleta antiga estava **hardcoded em 11 arquivos**), e o **cabeçalho das colunas passou a se repetir em todas as páginas**, o que exige código porque o PDF é uma imagem fatiada, não impressão de HTML. ⛔ No meio, o relato *"você bagunçou o tema light"* era a extensão **Dark Reader** repintando por cima (9 folhas injetadas; os tokens do produto estavam corretos) — resolvido com `<meta name="darkreader-lock">`, e ela contaminava o PDF também. Antes disso (2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-04 (3) — **as pendências do dia, executadas**: 9 relatórios com PDF gerado e medido (todos com topo `#ffffff`), 12 das 18 grids abertas (as 6 restantes estão **sem dados**), o `.pdv-flash` de 3.18 → 5.34, e a guarda `fimCorpoPx` exercitada na função real com 4 cenários. ⭐ E **duas corridas de concorrência novas, cada uma provada por SABOTAGEM** — sem o `FOR UPDATE` a mesma parcela de crediário é recebida 2×, e sem o `ON CONFLICT` as duas vendas passam pelo último slot da cota. **1209 testes verdes**. Antes disso (2026-09-04 (2) — **a grid de lista navega por ↑/↓** em 18 telas, com a linha corrente realçada (`.linha-focada`, translúcida — ⚠️ classe **própria**, porque `.linha-selecionada` já está tomada por 8 telas com três sentidos, inclusive "produto inativo"). O foco **não** sai do campo de busca, e o `scrollIntoView` precisou de `scroll-margin-top`: sem ele a primeira linha ficava **32 px coberta** pelo `<th>` sticky. Antes disso (2026-09-04 — **o tema claro virou azul** (paleta do template *ERP Dashboard*, escolhida por ele num piloto reversível `?paleta=a|b|hoje`; o escuro ficou como estava, decisão dele), o **PDF do relatório virou preto no branco** com paleta de impressão própria (era espelho do tema claro — e o bege da paleta antiga estava **hardcoded em 11 arquivos**), e o **cabeçalho das colunas passou a se repetir em todas as páginas**, o que exige código porque o PDF é uma imagem fatiada, não impressão de HTML. ⛔ No meio, o relato *"você bagunçou o tema light"* era a extensão **Dark Reader** repintando por cima (9 folhas injetadas; os tokens do produto estavam corretos) — resolvido com `<meta name="darkreader-lock">`, e ela contaminava o PDF também. Antes disso (2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,74 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-04 (3) — AS PENDÊNCIAS DO DIA, EXECUTADAS: 9 PDFs, 12 grids e duas corridas provadas por sabotagem
+>
+> **Medido:** **1209 testes verdes, 0 falhas** (eram 1207 — as duas corridas novas) · 9 PDFs gerados
+> e medidos pixel a pixel · 12 telas abertas · `tsc -b` limpo · nenhuma migration, e
+> `api/src/main` **intacto** ao final (as duas sabotagens foram revertidas e conferidas por diff).
+>
+> Ele mandou fazer as pendências que eram minha bola. O que saiu:
+>
+> ### ✅ #92 — o `.pdv-flash` (uma linha, e o número explica)
+>
+> O aviso verde de "item lançado" do PDV tinha texto `#08210f` sobre `--sucesso`: contraste
+> **3.18**, abaixo do mínimo de 4.5. Já dava **3.16** antes da paleta azul, então era defeito
+> antigo. Branco leva a **5.34**. É o aviso que o operador lê de relance, a metros do monitor, o dia
+> inteiro.
+>
+> ### ✅ #88 — nove relatórios com PDF gerado e medido
+>
+> Estoque (13 pág.), Lucratividade, Vendas (3), Comissões, Contas a Receber, Ordens de Serviço,
+> DRE, Fluxo de Caixa e Movimentação (3). **Todos com o topo em `#ffffff`** — a paleta de impressão
+> está confirmada em uso real, não só no arquivo.
+>
+> ⚠️ **Contas a Pagar e Diferenças de Estoque não geraram: falta dado** no ambiente de dev.
+> ⭐ E o cabeçalho repetido **só teve o que repetir no Estoque** — nos outros a grid coube numa
+> página. Vendas e Movimentação fazem **duas capturas** (KPIs/gráficos e grid separados), o que
+> aparece como duas imagens no PDF e é o desenho, não defeito.
+>
+> ### ✅ #89 — a guarda que nunca tinha decidido nada
+>
+> Com os dados de dev a Lucratividade cabe numa página, então o cenário não aparecia gerando PDF.
+> Exercitei a **função real** (`dividirEmPaginas`, importada do módulo que o Vite serve) com quatro
+> cenários sobre 900 mm de imagem e 184 mm de área útil:
+>
+> | Cenário | Páginas | Cabeçalho em |
+> |---|---|---|
+> | tabela longa | 6 | 2 a 6 ✓ |
+> | **tabela curta + gráficos** | 5 | **nenhuma** ✓ |
+> | sem tabela | 5 | nenhuma ✓ |
+> | tabela no meio | 5 | **só a 4** ✓ |
+>
+> ⭐ O quarto é o que ensina: a página 3 *mostra* parte da tabela e **não** leva cabeçalho — e está
+> certo, porque ela começa antes da tabela, então o `<thead>` real aparece nela naturalmente.
+>
+> ### 🟡 #93 — doze das dezoito grids, e as seis restantes estão vazias
+>
+> Abri e medi mais cinco (Funcionários, Usuários, Ordens de Serviço, Configuração de Etiqueta e
+> Perfil Fiscal), somando **12**. As outras **seis não têm linhas** no ambiente de dev — não é
+> defeito, é ausência de dado, e fecham sozinhas no primeiro uso real.
+>
+> ### ⭐ #68 (parte) — concorrência real: duas corridas, e a prova é a SABOTAGEM
+>
+> O item de concorrência deixou de ser "nenhuma". Duas corridas novas, e em cada uma o que prova o
+> teste não é ele passar, é ele **falhar quando a trava sai**:
+>
+> | Rotina | Sabotagem | Sem a trava |
+> |---|---|---|
+> | Recebimento de crediário | `FOR UPDATE` da parcela removido | a mesma parcela recebida **2×** |
+> | Cota de vendas | `ON CONFLICT` trocado por "lê, valida, grava" | as **duas** vendas passaram pelo último slot |
+>
+> Com as três que já existiam (numeração fiscal, limite de crédito, sangria), são **cinco** rotinas
+> de dinheiro com corrida real. ⚠️ **Cinco travas continuam sem teste** (vale-mercadoria, reserva de
+> OS, devolução ao fornecedor, entrada de mercadoria e o `SKIP LOCKED` do webhook) — pendência 95,
+> com o padrão pronto para repetir.
+>
+> ### ⛔ O que continua fora do meu alcance
+>
+> Impressão em papel, resposta da SEFAZ e as decisões de produto da agenda da OS (#54). Não são
+> "não fiz": são coisas que dependem de você ou de hardware.
 
 > ## 📌 2026-09-04 (2) — GRID NAVEGÁVEL POR ↑/↓ em 18 telas de lista
 >

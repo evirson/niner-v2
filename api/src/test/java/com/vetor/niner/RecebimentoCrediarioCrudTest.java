@@ -16,6 +16,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1019,4 +1020,117 @@ class RecebimentoCrediarioCrudTest {
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isConflict());
     }
+
+    /**
+     * ⭐ <b>Corrida real: a MESMA parcela recebida por duas threads ao mesmo tempo.</b>
+     *
+     * <p>Este é o cenário do balcão com dois caixas abertos, ou do duplo clique num "Receber" que
+     * demorou a responder. Sem o {@code FOR UPDATE} da parcela, as duas transações leem
+     * {@code valor_recebido = 0}, as duas concluem que ela está em aberto e as duas gravam: o
+     * cliente aparece tendo pago R$ 300 numa dívida de R$ 150, entram <b>dois</b> lançamentos de
+     * caixa e o fechamento do dia sobra R$ 150 que ninguém colocou na gaveta.
+     *
+     * <p>⚠️ <b>Não mede tempo nem dorme</b> (ver {@code feedback_testes_frageis_por_relogio}): as
+     * duas threads saem juntas de uma {@link CountDownLatch} e o que se afirma é a
+     * <b>invariante</b> — uma baixa, um lote, um lançamento de caixa. Se as threads não se
+     * cruzarem numa execução o teste continua verdadeiro; ele nunca acusa falso.
+     *
+     * <p>⭐ <b>A prova vem do BANCO, não do status HTTP.</b> Contar quantas respostas deram 200
+     * deixaria passar um servidor que responde 409 e grava assim mesmo — que é exatamente o
+     * defeito que se quer excluir.
+     */
+    @Test
+    void mesmaParcelaRecebidaDuasVezesAoMesmoTempoSoBaixaUmaVez() throws Exception {
+        String token = assinarNovoTenant("crediario-corrida");
+        long idTenant = extrairIdTenant(token);
+        long idCliente = criarCliente(token, "Cliente Corrida");
+        long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO CORRIDA", "CREDIARIO", false);
+        long idCarteiraPaga = criarTipoCarteira(token, "DINHEIRO CORRIDA", "AVISTA", true);
+        definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
+
+        long idContaReceber;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVenda = criarVenda(c, idTenant, idEmpresa, idCliente);
+            idContaReceber = criarParcela(c, idTenant, idVenda, idCarteiraCrediario, 1, 0, "150.00", false);
+        }
+
+        String corpo = """
+                {"idCliente":%d,"idsContaReceber":[%d],"pagamentos":[{"idCarteira":%d,"valorPago":150.00}]}
+                """.formatted(idCliente, idContaReceber, idCarteiraPaga);
+
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var aceitas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        Runnable receber = () -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                int status = mvc.perform(post("/api/v1/recebimento-crediario")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(APPLICATION_JSON).content(corpo))
+                        .andReturn().getResponse().getStatus();
+                if (status == 200 || status == 201) {
+                    aceitas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(receber, "recebimento-1");
+        Thread b = new Thread(receber, "recebimento-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertTrue(falhas.isEmpty(), "nenhuma thread pode explodir por outro motivo: " + falhas);
+        assertEquals(1, aceitas.get(), "a mesma parcela não pode ser recebida duas vezes");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            // A parcela recebeu exatamente o valor dela — nem o dobro, nem duas baixas somadas.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT valor_recebido FROM contas_receber WHERE id_conta_receber = ?")) {
+                ps.setLong(1, idContaReceber);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertEquals(0, new BigDecimal("150.00").compareTo(rs.getBigDecimal(1)),
+                            "a parcela vale 150,00 e só pode ter recebido isso");
+                }
+            }
+
+            // Um lote, não dois.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM contas_receber_lote WHERE id_tenant = ? AND id_cliente = ?")) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idCliente);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertEquals(1, rs.getInt(1), "um lote de recebimento, não dois");
+                }
+            }
+
+            // ⭐ E o caixa: dinheiro duplicado aqui é sobra no fechamento do dia.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT count(*), COALESCE(SUM(cd.valor), 0)
+                    FROM caixa_detalhe cd
+                    WHERE cd.id_tenant = ? AND cd.tipo_operacao::text = 'RECEBIMENTO_PARCELA_CREDIARIO'
+                    """)) {
+                ps.setLong(1, idTenant);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertEquals(1, rs.getInt(1), "um lançamento de caixa, não dois");
+                    assertEquals(0, new BigDecimal("150.00").compareTo(rs.getBigDecimal(2)),
+                            "não pode entrar no caixa mais do que a parcela valia");
+                }
+            }
+        }
+    }
+
 }

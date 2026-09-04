@@ -1159,7 +1159,11 @@ a.menu-card:hover {
 
 .pdv-flash {
   position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px); opacity: 0;
-  background: var(--sucesso); color: #08210f; font-weight: 700; padding: 12px 22px; border-radius: 999px;
+  /* Texto BRANCO, não o verde-escuro que estava aqui (2026-09-04, pendência 92): sobre `--sucesso`
+     ele dava contraste 3.18, abaixo do mínimo de 4.5 — e já dava 3.16 antes da paleta azul, então
+     era defeito antigo, não regressão dela. Branco sobre o mesmo fundo dá 5.34. ⚠️ Este aviso é o
+     "item lançado" do PDV: o operador o lê de relance, a metros do monitor, o dia inteiro. */
+  background: var(--sucesso); color: #ffffff; font-weight: 700; padding: 12px 22px; border-radius: 999px;
   box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: opacity .18s, transform .18s; pointer-events: none;
   font-size: 14px; z-index: 150;
 }

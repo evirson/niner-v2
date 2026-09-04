@@ -177,7 +177,44 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 > pixel a pixel. História completa em `docs/PROGRESSO.md` (2026-09-04); mecanismo em
 > `docs/telas/relatorio-vendas.md`.
 
-### 🟢 93. Onze das dezoito grids com navegação por seta não foram abertas
+### 🟢 95. Concorrência real: duas corridas escritas, cinco travas ainda sem teste
+
+Em 2026-09-04 o item de concorrência do **#68** deixou de ser "nenhuma": duas corridas novas
+entraram, **cada uma provada por sabotagem** (a prova não é o teste passar, é ele **falhar** quando
+a trava sai):
+
+| Rotina | Invariante | Sabotagem | Resultado sem a trava |
+|---|---|---|---|
+| **Recebimento de crediário** | uma baixa, um lote, um lançamento de caixa | `FOR UPDATE` da parcela removido | a mesma parcela recebida **2×** |
+| **Cota de vendas** | contador nunca acima de cota + tolerância | `ON CONFLICT` trocado por "lê, valida, grava" | as **duas** vendas passaram pelo último slot |
+
+Somadas às três que já existiam (numeração fiscal, limite de crédito no PDV, sangria), são **cinco**
+rotinas de dinheiro com corrida real.
+
+⚠️ **Cinco travas continuam sem teste concorrente**, e todas movem dinheiro ou estoque:
+
+- **Vale-mercadoria** — resgate duplo do mesmo vale.
+- **Reserva de estoque da OS** — a mesma peça reservada duas vezes.
+- **Devolução ao fornecedor** — `FOR UPDATE` do estoque (`DevolucaoCompraService:414`).
+- **Entrada de mercadoria** — `FOR UPDATE OF pmm` (preço médio) e o do mestre, contra
+  cancelamento simultâneo.
+- **Webhook de cobrança** — `SKIP LOCKED`: dois workers pegando o mesmo evento.
+
+⭐ **O padrão está pronto e é barato de repetir:** `CountDownLatch` para a largada, invariante
+afirmada **no banco** (nunca o status HTTP, que deixaria passar um servidor que responde 409 e grava
+assim mesmo), e a sabotagem para provar que o teste detecta. Ver `RecebimentoCrediarioCrudTest` e
+`CotaVendasTest`.
+
+### 🟡 93. Doze das dezoito grids exercitadas — **as seis restantes estão SEM DADOS**
+
+> **Exercitadas e medidas** (navegação, foco preservado, 0 px cobertos pelo cabeçalho sticky):
+> Clientes, Produtos, Fornecedores, Plano de Contas, Orçamentos, Tipos de Carteira, Documentos
+> Fiscais, **Funcionários, Usuários, Ordens de Serviço, Configuração de Etiqueta e Perfil Fiscal**.
+>
+> ⚠️ **Seis não têm linhas no ambiente de dev** e por isso não exercitaram nada: Conta Corrente,
+> Movimento de Conta Corrente, Contas a Pagar, Entrada de Mercadoria, Transferências e
+> Cancelamento de Devolução. Não é defeito — é ausência de dado. Fecham sozinhas na primeira vez
+> que ele usar essas telas com movimento real.
 
 A navegação por ↑/↓ com a linha realçada ([[project_grid_navegavel_por_setas]],
 `lib/useNavegacaoDeGrid.ts`) foi aplicada em **18** telas de lista. **Sete** foram abertas e
@@ -215,7 +252,20 @@ mesma linha confundiriam.
 reaproveitando o realce da tela. É comportamento diferente — a seta passa a *escolher*, não só
 *apontar* —, e por isso está registrado como decisão em aberto, não como tarefa.
 
-### 🟢 88. Nove dos onze relatórios não tiveram o PDF gerado
+### ✅ 88. Os relatórios tiveram o PDF gerado — **FECHADO em 2026-09-04**
+
+> **Medido em 9 relatórios**, todos com o topo em `#ffffff`: Estoque (13 páginas), Lucratividade,
+> Vendas (3 pág.), Comissões, Contas a Receber, Ordens de Serviço, DRE, Fluxo de Caixa e
+> Movimentação de Produtos (3 pág.). A paleta de impressão está confirmada em produção real.
+>
+> ⚠️ **Dois não foram gerados por falta de dados** no ambiente: **Contas a Pagar** e **Diferenças
+> de Estoque** (esta depende de um balanço lançado). Não é defeito conhecido — é ausência de dado.
+>
+> ⭐ **O cabeçalho repetido só teve o que repetir no Relatório de Estoque** ({"I0":13,"I1":12}): nos
+> demais a grid coube numa página. Vendas e Movimentação fazem **duas capturas** (KPIs/gráficos e
+> grid separados), o que aparece como duas imagens no PDF e é o desenho esperado, não defeito.
+
+### 🟢 88b. Contas a Pagar e Diferenças de Estoque continuam sem PDF gerado (falta dado)
 
 A paleta de impressão (preto no branco) e o cabeçalho de coluna repetido foram aplicados nos **11**
 módulos `lib/*Captura.ts`, verificados um a um por script e por `tsc -b`. Mas só **dois** foram
@@ -234,7 +284,26 @@ Produtos (Kardex), DRE, Fluxo de Caixa e Diferenças de Estoque.
 de Caixa) o esperado é **não** haver `I1`: eles têm mais de um `<thead>` e a repetição fica
 desligada de propósito.
 
-### 🟢 89. O caso "tabela curta em relatório longo" não foi exercitado
+### ✅ 89. A guarda `fimCorpoPx` foi exercitada — **FECHADO em 2026-09-04**
+
+> Com os dados de dev a Lucratividade cabe numa página, então o cenário não aparecia gerando PDF.
+> A guarda foi exercitada **na função real** (`dividirEmPaginas`, importada do módulo servido pelo
+> Vite), com quatro cenários sobre uma imagem de 900 mm e área útil de 184 mm:
+>
+> | Cenário | Páginas | Cabeçalho em |
+> |---|---|---|
+> | tabela longa (40→900 mm) | 6 | 2 a 6 ✓ |
+> | **tabela curta + gráficos (40→120 mm)** | 5 | **nenhuma** ✓ |
+> | sem tabela | 5 | nenhuma ✓ |
+> | tabela no meio (400→700 mm) | 5 | **só a 4** ✓ — a única que *começa* dentro dela |
+>
+> ⭐ O cenário 4 é o mais informativo: a página 3 *mostra* parte da tabela mas **não** leva
+> cabeçalho, e está certo — ela começa antes da tabela, então o `<thead>` real aparece nela.
+>
+> ⚠️ **Continua sem prova em PDF real** de um relatório longo com tabela curta; a matemática está
+> exercitada, a renderização não.
+
+### 🟢 89b. O caso "tabela curta em relatório longo" nunca apareceu num PDF real
 
 A segunda guarda do cabeçalho repetido (`fimCorpoPx` — a página só leva cabeçalho se **começar
 dentro** do corpo da tabela) existe porque a Lucratividade tem uma tabela curta mais gráficos. Só
@@ -263,7 +332,13 @@ antes de aplicar, com o custo de alinhar (`--accent` e `--accent-rgb` nos dois b
 linhas), e ele optou por manter o escuro intacto. **Não "consertar" sem falar com ele** — está
 registrado no comentário do `styles.css`.
 
-### 🟢 92. `.pdv-flash` com contraste 3.18 (pré-existente, não corrigido)
+### ✅ 92. `.pdv-flash` corrigido — **FECHADO em 2026-09-04**
+
+> O texto do aviso "item lançado" do PDV passou de `#08210f` para **branco**: contraste de
+> **3.18 → 5.34** sobre `--sucesso`. Era defeito antigo (dava 3.16 antes da paleta azul), não
+> regressão dela. ⚠️ **Não conferido na tela**: o aviso só aparece ao lançar um item no PDV.
+
+### 🟢 92b. O `.pdv-flash` corrigido não foi visto na tela
 
 O aviso verde de "item lançado" do PDV tem contraste **3.18** contra o mínimo de 4.5 — mas já era
 **3.16** antes da paleta nova, então **não é regressão**. Deixado como estava porque o pedido era
