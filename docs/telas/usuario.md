@@ -338,3 +338,14 @@ acesso. Spec própria: `docs/telas/login-duas-etapas.md`.
 Trocar a senha ou desativar o usuário **derruba a sessão dele** na requisição seguinte — antes, o
 token valia 8 horas e demitir alguém não o tirava do sistema. Spec própria:
 `docs/telas/revogacao-de-sessao.md`.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+⚠️ **Esta tela não foi aberta no navegador na entrega de 09-04** — a mudança foi aplicada por
+script e conferida (import, spread na grid principal e não em modal, sem `return` antecipado antes
+do hook) mais `tsc -b`, mas só sete das dezoito telas foram exercitadas de verdade.

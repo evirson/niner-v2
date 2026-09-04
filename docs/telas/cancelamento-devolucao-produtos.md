@@ -227,3 +227,15 @@ recusa vinda do servidor.
 
 **Item 13.** O campo principal da tela (Nº do Vale de Devolução) não tinha `autoFocus` — convenção
 de toda tela de lista/localização desde 2026-08-22.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+⚠️ **Esta tela não foi aberta no navegador na entrega de 09-04** — a mudança foi
+aplicada por script e conferida (o import resolve, o spread caiu na `<tr>` da grid principal e não
+de um modal, não há `return` antecipado antes do hook) mais `tsc -b`, mas só sete das dezoito
+telas foram exercitadas de verdade.

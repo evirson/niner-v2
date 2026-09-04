@@ -218,6 +218,23 @@ já precisa criar uma.
   `web/src/styles.css`, convenção do shell reaproveitável em outras telas de listagem).
 - **Grid compacta (2026-07-21):** espaçamento vertical entre linhas reduzido
   (`.table-compacta`, `padding: 6px 16px` em vez de `12px 16px`).
+- **Navegação por ↑/↓ na grid (2026-09-04, `lib/useNavegacaoDeGrid.ts`):** as setas percorrem as
+  linhas e a linha corrente fica realçada com `.linha-focada` — fundo translúcido
+  (`rgba(var(--accent-rgb), .14)`) mais uma faixa de 3px à esquerda por `box-shadow: inset` (não
+  `border-left`, que empurraria a primeira coluna). Pedido do dono do produto: *"uma barra, tipo
+  uma marca d'água transparente na linha toda"*. Vale para as **18** telas de lista.
+  - ⚠️ **A classe é `.linha-focada`, nunca `.linha-selecionada`:** esta última já está tomada por 8
+    telas com três sentidos — registro escolhido para uma ação, item marcado numa seleção múltipla
+    e, no `PuxarOrcamentoModal`, **produto inativo**. São conceitos diferentes: uma é *o que eu
+    escolhi*, a outra é *onde o cursor do teclado está*.
+  - ⭐ **O foco não sai do campo de busca.** É consequência direta do `autoFocus` das telas de lista:
+    focar a `<tr>` faria o operador perder o campo a cada seta, sem poder refinar o que digitou.
+    (O ledger do PDV faz o contrário, e está certo lá — a grid é o centro daquela tela.)
+  - ⚠️ **`scrollIntoView` não sabe que o `<th>` é `sticky`:** medido, a primeira linha ficava **32 px
+    coberta** pelo cabeçalho ao subir. O hook aplica `scroll-margin-top` tirado da **altura real** do
+    cabeçalho — `table` e `table-compacta` têm padding diferente, um valor fixo erraria numa delas.
+  - Para promover uma grid nova: `const { propsDaLinha } = useNavegacaoDeGrid(lista.map((x) => x.id))`
+    e `{...propsDaLinha(x.id, indice)}` na `<tr>`.
 - **Botão de fechar (✕):** no canto direito do cabeçalho, tanto na listagem quanto no
   formulário — componente `BotaoFecharTela`, que volta pelo histórico real (`navigate(-1)`) e
   nunca para uma rota fixa (convenção de todo o sistema, ver `docs/PROGRESSO.md`, 2026-08-04).

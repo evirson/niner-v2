@@ -414,3 +414,12 @@ SELECT c.conrelid::regclass, a.attname FROM pg_constraint c
 **No plano de contas faltava `cfg_geral.id_plano_contas_compra_mercadoria`** (V032). O contador que
 cria uma conta própria de compra de mercadoria, aponta o parâmetro para ela e depois volta atrás
 ficava com a conta presa — e a mensagem não dizia que o vínculo está em **Parâmetros do Sistema**.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+✅ **Aberta e medida no navegador em 09-04.**

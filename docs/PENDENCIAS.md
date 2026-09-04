@@ -177,6 +177,44 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 > pixel a pixel. História completa em `docs/PROGRESSO.md` (2026-09-04); mecanismo em
 > `docs/telas/relatorio-vendas.md`.
 
+### 🟢 93. Onze das dezoito grids com navegação por seta não foram abertas
+
+A navegação por ↑/↓ com a linha realçada ([[project_grid_navegavel_por_setas]],
+`lib/useNavegacaoDeGrid.ts`) foi aplicada em **18** telas de lista. **Sete** foram abertas e
+medidas no navegador: Clientes, Produtos, Fornecedores, Plano de Contas, Orçamentos, Tipos de
+Carteira e Documentos Fiscais.
+
+**Faltam abrir:** Funcionários, Usuários, Conta Corrente, Movimento de Conta Corrente, Contas a
+Pagar, Ordens de Serviço, Entrada de Mercadoria, Transferências, Configuração de Etiqueta, Perfil
+Fiscal e Cancelamento de Devolução.
+
+As onze receberam a mesma transformação por script, conferida item a item — o import resolve, o
+spread caiu na `<tr>` da grid **principal** e não de um modal interno, e não há `return`
+antecipado dentro do componente antes do hook (o que quebraria as regras de hooks só em runtime) —
+mais `tsc -b` limpo. ⚠️ Mas isso é leitura de código: o defeito do `scrollIntoView` com cabeçalho
+`sticky` (32 px cobertos) só apareceu **abrindo e subindo** a lista.
+
+⚠️ **Duas apareceram sem linhas** no ambiente de teste (Contas a Pagar e Movimento de Conta
+Corrente): sem dados, não exercitaram nada — abrir com dados é o que vale.
+
+**Como conferir rápido, por tela:** abrir, apertar ↓ algumas vezes e checar (a) a linha realçada
+anda, (b) o foco continua no campo de busca, (c) subindo até o topo a primeira linha **não** fica
+sob o cabeçalho.
+
+⚠️ **Onde o foco automático cai num `<select>`** (Documentos Fiscais, e possivelmente Contas a
+Pagar pelo popup de filtros), a seta pertence ao select e a grid só navega depois de sair dele. É a
+guarda funcionando, não defeito — mas é a assimetria mais provável de ele notar.
+
+### 🔵 94. Pesquisa de Vendas e Devolução ao Fornecedor fora do padrão de grid (decisão)
+
+Não receberam o cursor de teclado porque nelas o realce **já significa outra coisa**: venda
+escolhida (que dirige o painel de detalhe) e item marcado com checkbox. Dois realces concorrentes na
+mesma linha confundiriam.
+
+⭐ Se for pedido, o caminho **não** é aplicar o hook: é fazer a seta mover a seleção que já existe,
+reaproveitando o realce da tela. É comportamento diferente — a seta passa a *escolher*, não só
+*apontar* —, e por isso está registrado como decisão em aberto, não como tarefa.
+
 ### 🟢 88. Nove dos onze relatórios não tiveram o PDF gerado
 
 A paleta de impressão (preto no branco) e o cabeçalho de coluna repetido foram aplicados nos **11**
@@ -1911,6 +1949,9 @@ não somar mais um item.
 >   a consequência apontada. Não mexer sem falar.
 > - 🟢 **92** — `.pdv-flash` com contraste 3.18; **pré-existente** (era 3.16), não corrigido porque
 >   o pedido era paleta.
+> - 🟢 **93** — 11 das 18 grids que ganharam navegação por ↑/↓ **não foram abertas** (sete foram).
+> - 🔵 **94** — Pesquisa de Vendas e Devolução ao Fornecedor ficaram **fora** desse padrão, por
+>   decisão: nelas o realce já significa seleção/marcação.
 
 > ⚠️ **Apresentar assim, agrupado — nunca as ~29 linhas cruas.** Ele já disse *"TA MUITO CONFUSO"*.
 

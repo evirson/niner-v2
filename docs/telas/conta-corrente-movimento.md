@@ -133,3 +133,14 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Lançamento de um movimento em menos de 20 segundos.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+⚠️ **Não exercitada:** no ambiente de teste esta tela apareceu **sem linhas** (sem dados), então
+a navegação não chegou a ser usada aqui. ⚠️ E a chave da linha nesta grid é **texto**
+(`localizador`), não um id numérico — o hook aceita os dois, mas é a única assim.

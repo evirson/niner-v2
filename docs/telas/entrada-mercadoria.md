@@ -528,3 +528,15 @@ R$ 9,99, e foi o teste `rateioDeFreteDistribuiProporcionalmenteQuandoFlagLigada`
 Sem o teto, o resíduo do último item podia ficar **NEGATIVO**: 900 itens com R$ 5,00 de frete dão
 cota de R$ 0,00555, que arredonda para R$ 0,01 em cada linha — 899 × R$ 0,01 = R$ 8,99, e o item
 900 recebia **−R$ 3,99**.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+⚠️ **Esta tela não foi aberta no navegador na entrega de 09-04** — a mudança foi
+aplicada por script e conferida (o import resolve, o spread caiu na `<tr>` da grid principal e não
+de um modal, não há `return` antecipado antes do hook) mais `tsc -b`, mas só sete das dezoito
+telas foram exercitadas de verdade.

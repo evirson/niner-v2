@@ -254,3 +254,14 @@ tela avisa *"Mostrando os primeiros 20 — refine a busca para ver mais."* quand
 ⚠️ O número está em **duas constantes que precisam bater**: `LIMITE_BUSCA` no serviço e
 `LIMITE_BUSCA_EMISSAO` em `web/src/lib/etiquetaEmissao.ts`. Mudar uma sem a outra faz o aviso
 aparecer na hora errada — ou nunca.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+⚠️ **Não exercitada:** no ambiente de teste esta tela apareceu **sem linhas** (sem dados). ⚠️ E
+o filtro obrigatório dela abre num popup: se o foco cair num `<select>`, a seta pertence ao select
+e a grid só navega depois que o operador sair dele.

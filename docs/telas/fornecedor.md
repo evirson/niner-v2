@@ -194,3 +194,12 @@ inscrição estadual preenchida, e a tela marca sozinha.
 **A importação de dados deixa os dois nulos/default de propósito** — planilha migrada de outro
 sistema raramente traz classificação fiscal, e a tela preenche o IBGE sozinha pelo CEP na primeira
 edição. Mesmo espírito da isenção de validação de TELEFONE e e-mail descrita acima.
+
+---
+
+**Revisão 2026-09-04 — a grid navega por ↑/↓.** As setas percorrem as linhas e a linha corrente
+fica realçada (`.linha-focada`: fundo translúcido + faixa à esquerda), sem tirar o foco do campo de
+busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-padrão
+`docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
+
+✅ **Aberta e medida no navegador em 09-04.**
