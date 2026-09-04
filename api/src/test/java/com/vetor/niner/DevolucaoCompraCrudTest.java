@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -434,4 +435,92 @@ class DevolucaoCompraCrudTest {
                                 """.formatted(idEntradaA, idVariacaoA)))
                 .andExpect(status().isConflict());
     }
+
+    /**
+     * ⭐ <b>Corrida real: duas devoluções ao fornecedor disputando o mesmo estoque.</b>
+     *
+     * <p>Com 10 em estoque e duas devoluções de 6 disparadas juntas, só uma pode passar — 12 não
+     * existem. Este é o cenário que o javadoc de {@code DevolucaoCompraService.travarEstoque}
+     * descreve em palavras (<i>"duas devoluções simultâneas leem as mesmas 8 unidades e devolvem
+     * 16"</i>) e que nenhum teste exercitava.
+     *
+     * <p><b>Por que aqui a regra é mais estreita que no resto do sistema.</b> O Niner permite
+     * estoque negativo de propósito ({@code cfg_permite_estoque_negativo}), então quase nenhuma
+     * rotina depende de conferir saldo. A devolução ao fornecedor é a exceção: só devolve o que
+     * <b>ainda está em estoque</b>, porque o que sai daqui vira uma <b>NF-e 55 declarando à SEFAZ
+     * que a mercadoria saiu fisicamente</b>. Devolver 12 de 10 é nota fiscal afirmando um fato que
+     * não aconteceu — por isso a leitura e a gravação têm de acontecer sob a mesma trava
+     * ({@code FOR UPDATE}).
+     *
+     * <p>⚠️ Não mede tempo nem dorme (ver {@code feedback_testes_frageis_por_relogio}): as threads
+     * saem juntas de uma {@link java.util.concurrent.CountDownLatch} e o que se afirma é a
+     * <b>invariante</b> — o estoque nunca fica negativo e a soma devolvida nunca passa do que havia.
+     *
+     * <p>⭐ A prova vem do <b>banco</b>: contar 201 deixaria passar um servidor que responde 409 e
+     * grava assim mesmo.
+     */
+    @Test
+    void duasDevolucoesSimultaneasNaoDevolvemMaisDoQueTemEmEstoque() throws Exception {
+        String token = assinarNovoTenant("dev-corrida");
+        long idTenant = extrairIdTenant(token);
+        long idFornecedor = criarFornecedor(token);
+        long idVariacao = criarVariacaoComEan(token, "BOTA CORRIDA", EAN_ITEM_1);
+        long idEntrada = entradaComXml(token, idFornecedor, idVariacao, "10");
+
+        // 6 + 6 = 12 numa entrada de 10: a segunda tem de bater no saldo.
+        String corpo = """
+                {"idMovimentoOrigem":%d,"itens":[{"idVariacao":%d,"qtd":6}]}
+                """.formatted(idEntrada, idVariacao);
+
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var aceitas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        Runnable devolver = () -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                int status = mvc.perform(post("/api/v1/estoque/devolucao-compra")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(APPLICATION_JSON).content(corpo))
+                        .andReturn().getResponse().getStatus();
+                if (status == 200 || status == 201) {
+                    aceitas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(devolver, "devolucao-1");
+        Thread b = new Thread(devolver, "devolucao-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertThat(falhas).as("nenhuma thread pode explodir por outro motivo").isEmpty();
+        assertThat(aceitas.get()).as("6 + 6 numa entrada de 10: só uma devolução pode passar").isEqualTo(1);
+
+        // ⭐ O estoque tem de ter caído exatamente uma vez — nunca ficar negativo.
+        assertThat(estoqueDe(idTenant, idVariacao))
+                .as("10 - 6 = 4; se der -2, as duas leram as mesmas unidades")
+                .isEqualByComparingTo("4");
+
+        // E a NF-e 55 correspondente: uma devolução gravada, não duas.
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT count(*) FROM produto_movimento_mestre"
+                             + " WHERE id_tenant = ? AND tipo_movimento = 'DEVOLUCAO_COMPRA'")) {
+            ps.setLong(1, idTenant);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertThat(rs.getInt(1)).as("uma devolução gravada, não duas").isEqualTo(1);
+            }
+        }
+    }
+
 }

@@ -177,33 +177,37 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 > pixel a pixel. História completa em `docs/PROGRESSO.md` (2026-09-04); mecanismo em
 > `docs/telas/relatorio-vendas.md`.
 
-### 🟢 95. Concorrência real: duas corridas escritas, cinco travas ainda sem teste
+### ✅ 95. Concorrência real em TODAS as travas de dinheiro — **FECHADO em 2026-09-04**
 
-Em 2026-09-04 o item de concorrência do **#68** deixou de ser "nenhuma": duas corridas novas
-entraram, **cada uma provada por sabotagem** (a prova não é o teste passar, é ele **falhar** quando
-a trava sai):
+Eram três corridas (numeração fiscal, limite de crédito, sangria). Hoje entraram **sete**, cobrindo
+todas as travas mapeadas. Em cada uma a prova não é o teste passar — é ele **falhar quando a trava
+sai**:
 
-| Rotina | Invariante | Sabotagem | Resultado sem a trava |
-|---|---|---|---|
-| **Recebimento de crediário** | uma baixa, um lote, um lançamento de caixa | `FOR UPDATE` da parcela removido | a mesma parcela recebida **2×** |
-| **Cota de vendas** | contador nunca acima de cota + tolerância | `ON CONFLICT` trocado por "lê, valida, grava" | as **duas** vendas passaram pelo último slot |
+| Rotina | Sabotagem | Sem a trava |
+|---|---|---|
+| Recebimento de crediário | `FOR UPDATE` da parcela | a mesma parcela recebida **2×** |
+| Cota de vendas | `ON CONFLICT` → "lê, valida, grava" | as **duas** vendas passaram pelo último slot |
+| Vale-mercadoria | `AND vale_usado = false` removido | o mesmo vale pagou **duas** vendas |
+| Devolução ao fornecedor | `FOR UPDATE` do estoque | devolveu **12 de 10** — NF-e 55 declarando saída inexistente |
+| Cancelamento de entrada | `FOR UPDATE OF pmm` | a entrada cancelada **duas vezes**, estoque revertido em dobro |
+| Reserva de OS | (ver abaixo — achou defeito real) | — |
+| Webhook (`SKIP LOCKED`) | `SKIP LOCKED` → `FOR UPDATE` | **o teste TRAVA** até o timeout |
 
-Somadas às três que já existiam (numeração fiscal, limite de crédito no PDV, sangria), são **cinco**
-rotinas de dinheiro com corrida real.
+⛔ **A corrida da OS achou um defeito de produção, e foi corrigido.** A reserva usava "UPDATE
+primeiro, INSERT se casou zero linhas" — correto sequencialmente, com uma **janela** entre os dois
+comandos. Com a peça ainda sem linha em `produto_estoque`, duas OS simultâneas faziam o UPDATE, as
+duas casavam zero, as duas chegavam ao INSERT, e a segunda violava `produto_estoque_uk`: o lojista
+via *"Registro em uso por outro cadastro — não pode ser excluído"* **ao abrir uma OS**. Hoje o INSERT
+tem `ON CONFLICT … DO UPDATE`, seguro aqui porque este caminho só roda com delta **positivo** (o
+problema do CHECK que motivou o desenho antigo é com delta negativo).
 
-⚠️ **Cinco travas continuam sem teste concorrente**, e todas movem dinheiro ou estoque:
-
-- **Vale-mercadoria** — resgate duplo do mesmo vale.
-- **Reserva de estoque da OS** — a mesma peça reservada duas vezes.
-- **Devolução ao fornecedor** — `FOR UPDATE` do estoque (`DevolucaoCompraService:414`).
-- **Entrada de mercadoria** — `FOR UPDATE OF pmm` (preço médio) e o do mestre, contra
-  cancelamento simultâneo.
-- **Webhook de cobrança** — `SKIP LOCKED`: dois workers pegando o mesmo evento.
-
-⭐ **O padrão está pronto e é barato de repetir:** `CountDownLatch` para a largada, invariante
-afirmada **no banco** (nunca o status HTTP, que deixaria passar um servidor que responde 409 e grava
-assim mesmo), e a sabotagem para provar que o teste detecta. Ver `RecebimentoCrediarioCrudTest` e
-`CotaVendasTest`.
+⚠️ **E a corrida do webhook acusou falso na primeira versão** — a lição está registrada no javadoc
+dela. Ela chamava `pegarLote()` em duas threads soltas por latch; como o método é `@Transactional`
+e **commita ao retornar**, se A terminasse antes de B consultar, B lia as mesmas linhas e o teste
+falhava **sem defeito nenhum**. Isolado passava; na suíte inteira falhou. Hoje as duas conexões são
+controladas à mão e a primeira **segura** a transação, então a sobreposição é garantida, não
+sorteada. ⭐ E há um guarda extra: o teste lê o fonte do serviço e exige que ele continue usando
+`SKIP LOCKED` — sem isso, a cópia local da SQL viraria mentira em silêncio.
 
 ### 🟡 93. Doze das dezoito grids exercitadas — **as seis restantes estão SEM DADOS**
 

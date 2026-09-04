@@ -565,9 +565,24 @@ public class OrdemServicoService {
             // A peça nunca teve movimento nesta empresa — não há linha para atualizar. Nasce aqui,
             // com saldo zero e a reserva. (Liberar o que não existe é no-op, de propósito: não há
             // reserva a devolver, e criar linha zerada só polui o estoque.)
+            //
+            // ⚠️ **`ON CONFLICT` obrigatório aqui, e a corrida provou por quê (2026-09-04).** Duas OS
+            // abertas ao mesmo tempo com a mesma peça sem linha de estoque: as duas fazem o UPDATE
+            // acima, as duas casam ZERO linhas, e as duas chegam neste INSERT — a segunda violava
+            // `produto_estoque_uk` e o lojista via *"Registro em uso por outro cadastro — não pode
+            // ser excluído"* ao abrir uma OS. O padrão "UPDATE primeiro, INSERT se não achou" é
+            // correto sequencialmente e tem uma janela entre os dois comandos.
+            //
+            // ⭐ E isto **não** contradiz o comentário acima: o problema do CHECK é com delta
+            // NEGATIVO (a tupla proposta levaria `reservado = -1`), e este INSERT só roda com
+            // `delta.signum() > 0`. A tupla proposta aqui é sempre positiva, então passa o
+            // `produto_estoque_reservado_ck` antes de o Postgres resolver o conflito.
             jdbc.sql("""
                             INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque, reservado)
                             VALUES (plataforma.tenant_atual(), ?, ?, 0, ?)
+                            ON CONFLICT (id_tenant, id_empresa, id_variacao) DO UPDATE
+                               SET reservado = GREATEST(produto_estoque.reservado + EXCLUDED.reservado, 0),
+                                   atualizado_em = now()
                             """)
                     .params(idEmpresa, idVariacao, delta)
                     .update();

@@ -25,6 +25,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.List;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HexFormat;
@@ -296,4 +297,108 @@ class CobrancaMercadoPagoTest {
                 .andExpect(status().isUnauthorized());
         assertThat(token).isNotBlank();
     }
+
+    /**
+     * ⭐ <b>Corrida real: dois workers puxando da fila de webhooks com as transações SOBREPOSTAS.</b>
+     *
+     * <p>A invariante do {@code SKIP LOCKED} é que os lotes sejam <b>disjuntos</b>: um evento não
+     * pode sair para os dois workers. Se sair, o mesmo pagamento é aplicado duas vezes — fatura
+     * quitada em duplicidade, ou assinatura reativada por um evento já consumido.
+     *
+     * <p>⚠️ <b>A primeira versão deste teste acusava falso, e o motivo vale mais que o teste.</b> Ele
+     * chamava {@code pegarLote()} em duas threads soltas por um latch e afirmava disjunção. Mas
+     * {@code pegarLote()} é {@code @Transactional} e <b>commita ao retornar</b>: se a thread A
+     * termina antes de B começar a consultar, o lock de A já morreu, as linhas continuam com
+     * {@code processado_em IS NULL}, e B lê exatamente as mesmas — <b>lotes idênticos sem defeito
+     * nenhum</b>. Isolado o teste passava; na suíte inteira (máquina mais carregada, menos
+     * sobreposição) ele falhou. Um teste de concorrência que depende de as threads se cruzarem por
+     * sorte é pior que nenhum, porque treina quem lê a falha a ignorá-lo.
+     *
+     * <p>⭐ <b>A correção é segurar a transação de propósito.</b> Aqui as duas conexões são
+     * controladas à mão: a primeira executa a consulta da fila e <b>não commita</b>; só então a
+     * segunda executa. Assim a sobreposição é garantida, não sorteada — e o que se mede é o
+     * comportamento do {@code SKIP LOCKED} no schema real.
+     *
+     * <p>⭐ <b>Medido ao sabotar (2026-09-04):</b> trocando o {@code SKIP LOCKED} por
+     * {@code FOR UPDATE} puro, este teste <b>não falha — ele TRAVA</b>. A segunda conexão fica
+     * esperando um lock que a primeira segura de propósito, e o processo só morre no timeout. É a
+     * diferença entre as duas cláusulas em uma frase: {@code SKIP LOCKED} <b>pula</b> o que está
+     * travado, {@code FOR UPDATE} <b>espera</b>. Num worker de fila isso não seria só lentidão: os
+     * dois workers ficariam serializados, e o segundo releria as mesmas linhas ao ser liberado.
+     *
+     * <p>⚠️ A SQL abaixo <b>espelha</b> a de {@link CobrancaWebhookProcessador#pegarLote()}. Para
+     * que a cópia não vire mentira no dia em que alguém mexer lá, a última asserção lê o fonte do
+     * serviço e exige que ele continue usando {@code SKIP LOCKED} — sem isso, este teste
+     * continuaria verde enquanto a produção perdia a garantia.
+     */
+    @Test
+    void doisWorkersPuxandoAFilaAoMesmoTempoNaoPegamOMesmoEvento() throws Exception {
+        final int QUANTOS = 12;
+        try (Connection c = abrirConexao();
+             PreparedStatement ps = c.prepareStatement("""
+                     INSERT INTO plataforma.webhook_gateway (gateway, evento_id, tipo, payload, proxima_tentativa)
+                     VALUES ('mercadopago', ?, 'payment', '{"data":{"id":"1"}}'::jsonb, now())
+                     """)) {
+            for (int i = 0; i < QUANTOS; i++) {
+                ps.setString(1, "corrida-skiplocked-" + java.util.UUID.randomUUID());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+
+        // Espelha `CobrancaWebhookProcessador.pegarLote()` — ver o javadoc acima.
+        String sqlFila = """
+                SELECT id FROM plataforma.webhook_gateway
+                 WHERE gateway = 'mercadopago' AND processado_em IS NULL AND proxima_tentativa <= now()
+                   AND tentativas < 8
+                 ORDER BY recebido_em
+                 LIMIT 20
+                 FOR UPDATE SKIP LOCKED
+                """;
+
+        List<Long> loteA = new java.util.ArrayList<>();
+        List<Long> loteB = new java.util.ArrayList<>();
+
+        try (Connection a = abrirConexao(); Connection b = abrirConexao()) {
+            a.setAutoCommit(false);
+            b.setAutoCommit(false);
+
+            // A pega o lote e SEGURA a transação aberta — os locks dele continuam de pé.
+            try (PreparedStatement ps = a.prepareStatement(sqlFila);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    loteA.add(rs.getLong(1));
+                }
+            }
+
+            // B consulta com os locks de A ainda vivos. Com SKIP LOCKED, pula o que A travou.
+            try (PreparedStatement ps = b.prepareStatement(sqlFila);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    loteB.add(rs.getLong(1));
+                }
+            }
+
+            a.rollback();
+            b.rollback();
+        }
+
+        assertThat(loteA).as("o primeiro worker tem de trazer eventos da fila").isNotEmpty();
+
+        // ⭐ A invariante: interseção vazia. Um evento entregue aos dois é um pagamento aplicado 2×.
+        var repetidos = new java.util.ArrayList<>(loteA);
+        repetidos.retainAll(loteB);
+        assertThat(repetidos)
+                .as("SKIP LOCKED: nenhum evento pode sair para os dois workers (A=%s, B=%s)", loteA, loteB)
+                .isEmpty();
+
+        // ⚠️ Guarda contra a cópia virar mentira: se alguém tirar o SKIP LOCKED do serviço, o teste
+        // acima continuaria verde (ele usa a SQL local) enquanto a produção perderia a garantia.
+        String fonte = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/vetor/niner/plataforma/cobranca/CobrancaWebhookProcessador.java"));
+        assertThat(fonte)
+                .as("o consumo da fila em produção tem de continuar usando FOR UPDATE SKIP LOCKED")
+                .contains("FOR UPDATE SKIP LOCKED");
+    }
+
 }

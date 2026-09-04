@@ -531,4 +531,92 @@ class CancelamentoEntradaCrudTest {
         long novoIdMovimento = efetivarEntrada(tenant.token(), tenant.idFornecedor(), tenant.idVariacao(), chave);
         assertThat(novoIdMovimento).isNotEqualTo(idMovimento);
     }
+
+    /**
+     * ⭐ <b>Corrida real: a MESMA entrada cancelada duas vezes ao mesmo tempo.</b>
+     *
+     * <p>É o duplo clique num "Cancelar" que demorou a responder, ou dois administradores agindo
+     * sobre a mesma entrada. Sem o {@code FOR UPDATE} do mestre, as duas transações leem
+     * {@code cancelado = false}, as duas concluem que podem cancelar, e as duas lançam o
+     * movimento inverso — <b>o estoque é revertido em dobro</b>. Numa entrada de 3 unidades o saldo
+     * vai a −3, e a loja passa a ter estoque negativo de uma compra que existiu uma vez só.
+     *
+     * <p>⚠️ E o estrago não para no saldo: o cancelamento também apaga as contas a pagar geradas
+     * pela entrada. Duas execuções sobre o mesmo registro são duas reversões financeiras.
+     *
+     * <p>⚠️ Não mede tempo nem dorme (ver {@code feedback_testes_frageis_por_relogio}): as threads
+     * saem juntas de uma {@link java.util.concurrent.CountDownLatch} e o que se afirma é a
+     * <b>invariante</b> — o estoque volta a zero, não a −3.
+     *
+     * <p>⭐ A prova vem do <b>banco</b>: contar 200 deixaria passar um servidor que responde 409 e
+     * reverte o estoque assim mesmo.
+     */
+    @Test
+    void cancelarAMesmaEntradaDuasVezesAoMesmoTempoRevertOEstoqueUmaVezSo() throws Exception {
+        TenantENota tenant = prepararTenantComProduto("cancel-corrida");
+        long idMovimento = efetivarEntrada(tenant.token(), tenant.idFornecedor(), tenant.idVariacao(), null);
+
+        try (Connection c = abrirConexao(tenant.idTenant())) {
+            assertThat(buscarQtdEstoque(c, tenant.idVariacao()))
+                    .as("a entrada colocou 3 no estoque").isEqualByComparingTo("3.000");
+        }
+
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var aceitas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        Runnable cancelar = () -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                int status = mvc.perform(post("/api/v1/estoque/entradas/" + idMovimento + "/cancelar")
+                                .header("Authorization", "Bearer " + tenant.token())
+                                .contentType(APPLICATION_JSON)
+                                .content("{\"motivo\":\"Lançada por engano\"}"))
+                        .andReturn().getResponse().getStatus();
+                if (status == 200 || status == 201) {
+                    aceitas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(cancelar, "cancelamento-1");
+        Thread b = new Thread(cancelar, "cancelamento-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertThat(falhas).as("nenhuma thread pode explodir por outro motivo").isEmpty();
+        assertThat(aceitas.get()).as("a mesma entrada não pode ser cancelada duas vezes").isEqualTo(1);
+
+        try (Connection c = abrirConexao(tenant.idTenant())) {
+            // ⭐ A invariante: 3 − 3 = 0. Se der −3.000, as duas reverteram.
+            assertThat(buscarQtdEstoque(c, tenant.idVariacao()))
+                    .as("o estoque volta a zero; −3 significaria reversão em dobro")
+                    .isEqualByComparingTo("0.000");
+
+            // Um movimento de cancelamento gravado, não dois.
+            // ⚠️ O cancelamento grava um movimento `CANCELAMENTO` próprio — NÃO usa
+            // `id_movimento_origem`, que é da devolução ao fornecedor (V053). Escrevi a asserção
+            // errada primeiro e ela acusou falso; conferir no serviço antes de "corrigir" produção
+            // foi o que evitou mexer no lugar errado.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT count(*) FROM produto_movimento_mestre
+                     WHERE id_tenant = ? AND tipo_movimento = 'CANCELAMENTO'
+                    """)) {
+                ps.setLong(1, tenant.idTenant());
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).as("um movimento de estorno, não dois").isEqualTo(1);
+                }
+            }
+        }
+    }
+
 }

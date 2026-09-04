@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-09-04 (3) — **as pendências do dia, executadas**: 9 relatórios com PDF gerado e medido (todos com topo `#ffffff`), 12 das 18 grids abertas (as 6 restantes estão **sem dados**), o `.pdv-flash` de 3.18 → 5.34, e a guarda `fimCorpoPx` exercitada na função real com 4 cenários. ⭐ E **duas corridas de concorrência novas, cada uma provada por SABOTAGEM** — sem o `FOR UPDATE` a mesma parcela de crediário é recebida 2×, e sem o `ON CONFLICT` as duas vendas passam pelo último slot da cota. **1209 testes verdes**. Antes disso (2026-09-04 (2) — **a grid de lista navega por ↑/↓** em 18 telas, com a linha corrente realçada (`.linha-focada`, translúcida — ⚠️ classe **própria**, porque `.linha-selecionada` já está tomada por 8 telas com três sentidos, inclusive "produto inativo"). O foco **não** sai do campo de busca, e o `scrollIntoView` precisou de `scroll-margin-top`: sem ele a primeira linha ficava **32 px coberta** pelo `<th>` sticky. Antes disso (2026-09-04 — **o tema claro virou azul** (paleta do template *ERP Dashboard*, escolhida por ele num piloto reversível `?paleta=a|b|hoje`; o escuro ficou como estava, decisão dele), o **PDF do relatório virou preto no branco** com paleta de impressão própria (era espelho do tema claro — e o bege da paleta antiga estava **hardcoded em 11 arquivos**), e o **cabeçalho das colunas passou a se repetir em todas as páginas**, o que exige código porque o PDF é uma imagem fatiada, não impressão de HTML. ⛔ No meio, o relato *"você bagunçou o tema light"* era a extensão **Dark Reader** repintando por cima (9 folhas injetadas; os tokens do produto estavam corretos) — resolvido com `<meta name="darkreader-lock">`, e ela contaminava o PDF também. Antes disso (2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
+**Última atualização:** 2026-09-04 (4) — **concorrência fechada**: as cinco travas que faltavam ganharam corrida real, **cada uma provada por sabotagem**, somando **sete** rotinas de dinheiro. ⛔ A corrida da OS **achou um defeito de produção** (o "UPDATE primeiro, INSERT depois" tem janela: duas OS simultâneas violavam a UNIQUE e o lojista lia *"Registro em uso por outro cadastro"* ao abrir uma OS). ⚠️ E uma corrida minha **acusou falso** — passava isolada e quebrava na suíte, porque o método commita ao retornar; a correção é segurar a transação à mão, não confiar em sorte. **1214 testes verdes**. Antes disso (2026-09-04 (3) — **as pendências do dia, executadas**: 9 relatórios com PDF gerado e medido (todos com topo `#ffffff`), 12 das 18 grids abertas (as 6 restantes estão **sem dados**), o `.pdv-flash` de 3.18 → 5.34, e a guarda `fimCorpoPx` exercitada na função real com 4 cenários. ⭐ E **duas corridas de concorrência novas, cada uma provada por SABOTAGEM** — sem o `FOR UPDATE` a mesma parcela de crediário é recebida 2×, e sem o `ON CONFLICT` as duas vendas passam pelo último slot da cota. **1209 testes verdes**. Antes disso (2026-09-04 (2) — **a grid de lista navega por ↑/↓** em 18 telas, com a linha corrente realçada (`.linha-focada`, translúcida — ⚠️ classe **própria**, porque `.linha-selecionada` já está tomada por 8 telas com três sentidos, inclusive "produto inativo"). O foco **não** sai do campo de busca, e o `scrollIntoView` precisou de `scroll-margin-top`: sem ele a primeira linha ficava **32 px coberta** pelo `<th>` sticky. Antes disso (2026-09-04 — **o tema claro virou azul** (paleta do template *ERP Dashboard*, escolhida por ele num piloto reversível `?paleta=a|b|hoje`; o escuro ficou como estava, decisão dele), o **PDF do relatório virou preto no branco** com paleta de impressão própria (era espelho do tema claro — e o bege da paleta antiga estava **hardcoded em 11 arquivos**), e o **cabeçalho das colunas passou a se repetir em todas as páginas**, o que exige código porque o PDF é uma imagem fatiada, não impressão de HTML. ⛔ No meio, o relato *"você bagunçou o tema light"* era a extensão **Dark Reader** repintando por cima (9 folhas injetadas; os tokens do produto estavam corretos) — resolvido com `<meta name="darkreader-lock">`, e ela contaminava o PDF também. Antes disso (2026-09-02 (3) — **o `cStat 938` caiu** (pendência 23, V110): mercadoria com CSOSN 500 saía sem o bloco de ST retido e a NF-e 55 era rejeitada. O valor vem da **entrada por XML** (decisão dele, com o contador), com o cadastro do produto como reserva, e a nota é **recusada antes de reservar número** quando não há. ⚠️ Quatro testes existentes falharam ao ligar o guarda — eles montavam exatamente a nota que a SEFAZ rejeitava. Antes disso (2026-09-02 (2)) — **a NF-e 55 de devolução saiu do bruto** (pendência 60): ela declarava R$ 30,00 referenciando, no mesmo XML, uma NFC-e de R$ 25,00. A ponta vizinha (devolução ao fornecedor) tinha o mesmo defeito e foi corrigida junto. Antes disso (2026-09-02) — **abrir as telas achou o que 1198 testes verdes não viam**: a tela `/acessos` do backoffice **nunca tinha funcionado** (cast de `smallint` para `Long`, e os 7 testes liam justamente a única linha que não quebrava), as abas de Documentos Fiscais usavam três classes CSS inexistentes, e `.tarja-aviso` é flex — todo aviso com `<strong>` saía repartido em colunas. Mais: a busca dos Acessos passou a ser **sob demanda** (pedido dele), venda sem nota **passou a emitir pela tela** (com guarda novo contra venda cancelada) e o `getRemoteAddr()` ganhou um guarda que reprova o build. Antes disso (2026-09-01 (5)) — **log de acesso ao ERP** (V109): estudo, decisões dele (sem marca, sem logoff, sem timer, sem geolocalização), implementação e a tela no backoffice; e o teste de isolamento que **passava pelo motivo errado**, trocado por um guarda que varre o código. Antes disso (4): a **NFS-e chegou ao Sefin**: o emissor estava em modo falso porque o compose não repassava a variável, a busca do código de serviço não achava "tosa", o código de grupo especial não gravava, e o popup oferecia NFC-e numa venda sem produto. Antes disso (3): a NFC-e voltou a emitir (ele redigitou o CSC), o cupom passou a **ler** o `infCpl` que eu gravava e não lia, a tela de NFS-e **nunca tinha conseguido salvar** (DTO de leitura como `@RequestBody`), e o `dhEmi` deixou de levar a hora da venda — provado contra a SEFAZ com uma venda de 3 h atrás autorizando
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,53 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-09-04 (4) — CONCORRÊNCIA FECHADA: sete rotinas de dinheiro, e a corrida achou um bug real
+>
+> **Medido:** **1214 testes verdes, 0 falhas** · cinco corridas novas, **cada uma provada por
+> sabotagem** · um defeito de produção encontrado e corrigido · nenhuma migration.
+>
+> A pendência 95 listava cinco travas sem teste concorrente. Todas fecharam.
+>
+> | Rotina | Sabotagem | Sem a trava |
+> |---|---|---|
+> | Vale-mercadoria | `AND vale_usado = false` removido | o mesmo vale pagou **duas** vendas |
+> | Devolução ao fornecedor | `FOR UPDATE` do estoque | devolveu **12 de 10** — NF-e 55 declarando saída inexistente |
+> | Cancelamento de entrada | `FOR UPDATE OF pmm` | cancelada **2×**, estoque revertido em dobro |
+> | Webhook | `SKIP LOCKED` → `FOR UPDATE` | **o teste TRAVA** até o timeout |
+> | Reserva de OS | — | **achou defeito real** (abaixo) |
+>
+> ### ⛔ A corrida da OS achou um defeito de PRODUÇÃO
+>
+> A reserva usava **"UPDATE primeiro, INSERT se casou zero linhas"** — correto sequencialmente, com
+> uma **janela** entre os dois comandos. Com a peça ainda sem linha em `produto_estoque`, duas OS
+> simultâneas faziam o UPDATE, as duas casavam zero, as duas chegavam ao INSERT, e a segunda violava
+> `produto_estoque_uk`. O lojista via *"Registro em uso por outro cadastro — não pode ser excluído"*
+> **ao abrir uma ordem de serviço** — a mensagem genérica que este repositório já catalogou como a
+> que manda o diagnóstico para o lado errado.
+>
+> ⭐ Hoje o INSERT tem `ON CONFLICT … DO UPDATE`, e isso **não** contradiz o comentário que proibia
+> `ON CONFLICT` ali: o problema do CHECK é com delta **negativo** (a tupla proposta levaria
+> `reservado = -1`), e este caminho só roda com `delta.signum() > 0`.
+>
+> ### ⚠️ E uma corrida minha ACUSOU FALSO — a lição vale mais que o teste
+>
+> A primeira versão da do webhook soltava duas threads chamando `pegarLote()`. Só que o método é
+> `@Transactional` e **commita ao retornar**: se a thread A terminasse antes de B consultar, o lock
+> de A já não existia, as linhas continuavam não processadas, e B lia **as mesmas** — lotes idênticos
+> **sem defeito nenhum**. Isolado passava; **na suíte inteira falhou**.
+>
+> ⭐ A correção é **segurar a transação de propósito**: duas conexões controladas à mão, a primeira
+> não commita, e só então a segunda consulta. A sobreposição passa a ser garantida, não sorteada. E
+> como a SQL virou cópia local, o teste **lê o fonte do serviço** e exige que ele continue usando
+> `SKIP LOCKED` — sem isso a cópia viraria mentira em silêncio.
+>
+> ⭐ **A sabotagem do webhook é a mais didática do dia:** removido o `SKIP LOCKED`, o teste **não
+> falha — trava**. `FOR UPDATE` puro **espera** o lock em vez de pular. É a diferença entre as duas
+> cláusulas em uma frase, e num worker de fila significa dois workers serializados com o segundo
+> relendo as mesmas linhas.
+>
+> Com as três que já existiam, são **sete** rotinas de dinheiro com corrida real.
 
 > ## 📌 2026-09-04 (3) — AS PENDÊNCIAS DO DIA, EXECUTADAS: 9 PDFs, 12 grids e duas corridas provadas por sabotagem
 >

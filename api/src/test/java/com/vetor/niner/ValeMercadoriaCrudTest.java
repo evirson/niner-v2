@@ -521,4 +521,126 @@ class ValeMercadoriaCrudTest {
                         .header("Authorization", "Bearer " + a.token()))
                 .andExpect(jsonPath("$.valeUsado").value(false));
     }
+
+    /**
+     * ⭐ <b>Corrida real: o MESMO vale resgatado por duas vendas ao mesmo tempo.</b>
+     *
+     * <p>O teste sequencial acima ({@code usarValeJaUsadoRespondeConflito}) prova que a segunda
+     * tentativa é recusada <b>depois</b> que a primeira terminou. Isso não cobre o caso real: dois
+     * caixas abertos, o cliente com o comprovante do vale na mão, e as duas vendas fechando no
+     * mesmo instante. Aí as duas leem {@code vale_usado = false} antes de qualquer uma gravar.
+     *
+     * <p>Se as duas passassem, o mesmo vale pagaria duas vendas — dinheiro que a loja não tem, e
+     * um lastro em estoque que só existia uma vez.
+     *
+     * <p><b>Como a trava funciona aqui.</b> Não é {@code FOR UPDATE}: é uma trava
+     * <b>otimista</b> — {@code UPDATE venda_devolucao SET vale_usado = true …
+     * WHERE … AND vale_usado = false}, e {@code atualizados == 0} vira conflito. O
+     * compare-and-set é atômico no Postgres, então a segunda transação enxerga zero linhas
+     * afetadas. Este teste é o que prova que essa condição no {@code WHERE} não é decorativa.
+     *
+     * <p>⚠️ Não mede tempo nem dorme (ver {@code feedback_testes_frageis_por_relogio}): as threads
+     * saem juntas de uma {@link java.util.concurrent.CountDownLatch} e o que se afirma é a
+     * <b>invariante</b>. Se elas não se cruzarem numa execução, o teste continua verdadeiro.
+     *
+     * <p>⭐ A prova vem do <b>banco</b>: uma venda gravada e o vale com um único débito. Contar 201
+     * deixaria passar um servidor que responde 409 e grava assim mesmo.
+     */
+    @Test
+    void mesmoValeResgatadoPorDuasVendasSimultaneasSoPagaUma() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("vale-corrida");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProdutoDevolvido = criarProdutoComPreco(tenant.token(), "Produto Devolvido Corrida", "30.00");
+        long idCliente = criarCliente(tenant.token(), "Cliente Vale Corrida");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Vale Corrida");
+        abrirCaixaDinheiro(tenant.token());
+        long idCarteiraVale = buscarIdCarteiraValeMercadoria(tenant.token());
+
+        // Duas variações distintas: cada thread vende a sua, para que a única disputa seja o VALE.
+        // (Produtos diferentes por causa da `produto_barra_variacao_uk` — ver o teste acima.)
+        long idProdutoA = criarProdutoComPreco(tenant.token(), "Produto Corrida Vale A", "30.00");
+        long idProdutoB = criarProdutoComPreco(tenant.token(), "Produto Corrida Vale B", "30.00");
+        long idVariacaoA;
+        long idVariacaoB;
+        ValeGerado vale;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacaoDevolvida = criarVariacao(c, idTenant, idProdutoDevolvido);
+            definirEstoque(c, idTenant, idEmpresa, idVariacaoDevolvida, BigDecimal.ZERO);
+            idVariacaoA = criarVariacao(c, idTenant, idProdutoA);
+            definirEstoque(c, idTenant, idEmpresa, idVariacaoA, new BigDecimal("10.000"));
+            idVariacaoB = criarVariacao(c, idTenant, idProdutoB);
+            definirEstoque(c, idTenant, idEmpresa, idVariacaoB, new BigDecimal("10.000"));
+            vale = gerarVale(tenant.token(), idVariacaoDevolvida);
+        }
+
+        String modelo = """
+                {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                 "pagamentos":[{"idCarteira":%d,"valorPago":30.00,"numeroParcelas":1,"idDevolucao":%d}]}
+                """;
+        String corpoA = modelo.formatted(idVariacaoA, idCliente, idFuncionario, idCarteiraVale, vale.idDevolucao());
+        String corpoB = modelo.formatted(idVariacaoB, idCliente, idFuncionario, idCarteiraVale, vale.idDevolucao());
+
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var aceitas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        java.util.function.Consumer<String> vender = corpo -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                int status = mvc.perform(post("/api/v1/pdv/vendas")
+                                .header("Authorization", "Bearer " + tenant.token())
+                                .contentType(APPLICATION_JSON).content(corpo))
+                        .andReturn().getResponse().getStatus();
+                if (status == 200 || status == 201) {
+                    aceitas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(() -> vender.accept(corpoA), "vale-1");
+        Thread b = new Thread(() -> vender.accept(corpoB), "vale-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertThat(falhas).as("nenhuma thread pode explodir por outro motivo").isEmpty();
+        assertThat(aceitas.get()).as("o mesmo vale não pode pagar duas vendas").isEqualTo(1);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            // O vale ficou marcado uma vez, apontando para UMA venda de débito.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT vale_usado, id_venda_debito FROM venda_devolucao WHERE id_devolucao = ?")) {
+                ps.setLong(1, vale.idDevolucao());
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getBoolean(1)).as("o vale tem de ficar marcado como usado").isTrue();
+                    assertThat(rs.getLong(2)).as("e apontando para a venda que o consumiu").isPositive();
+                }
+            }
+
+            // ⭐ E o caixa: o vale só pode ter entrado como pagamento UMA vez.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT count(*), COALESCE(SUM(valor), 0) FROM caixa_detalhe
+                    WHERE id_tenant = ? AND id_carteira = ?
+                    """)) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idCarteiraVale);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).as("um lançamento de vale no caixa, não dois").isEqualTo(1);
+                    assertThat(rs.getBigDecimal(2)).as("não pode entrar mais do que o vale valia")
+                            .isEqualByComparingTo(vale.valorVale());
+                }
+            }
+        }
+    }
+
 }

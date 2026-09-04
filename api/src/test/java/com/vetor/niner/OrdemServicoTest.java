@@ -956,4 +956,82 @@ class OrdemServicoTest {
                         """.formatted(idOs, idCliente, idFuncionario, desconto, idVariacaoPeca,
                         idVariacaoServico, idCarteiraDinheiro(), valorPago)));
     }
+
+    /**
+     * ⭐ <b>Corrida real: duas OS reservando a MESMA peça ao mesmo tempo.</b>
+     *
+     * <p>A invariante aqui é de <b>soma</b>, não de exclusão: as duas OS <i>devem</i> ser abertas, e
+     * a reserva tem de ficar em <b>2</b>. O defeito que este teste exclui é o oposto do das outras
+     * corridas — não é "as duas passaram quando só uma podia", é "as duas passaram e a reserva
+     * ficou em 1".
+     *
+     * <p><b>Por que isso é possível.</b> A reserva é um ajuste por <b>delta</b>
+     * ({@code UPDATE produto_estoque SET reservado = GREATEST(reservado + ?, 0)}), e a atomicidade
+     * disso não é óbvia: escrito como "lê o reservado, soma em Java, grava o total", as duas
+     * transações leriam 0, as duas gravariam 1, e uma peça sairia da oficina sem estar reservada
+     * para ninguém — a segunda OS trabalharia com estoque que a primeira já contava como seu.
+     * O {@code reservado + ?} dentro do próprio UPDATE é o que serializa, porque o Postgres trava a
+     * linha para o read-modify-write.
+     *
+     * <p>⚠️ Não mede tempo nem dorme (ver {@code feedback_testes_frageis_por_relogio}): as threads
+     * saem juntas de uma {@link java.util.concurrent.CountDownLatch}. Se não se cruzarem numa
+     * execução, o teste continua verdadeiro — ele nunca acusa falso.
+     *
+     * <p>⭐ A prova vem do <b>banco</b> ({@code produto_estoque.reservado}), não do status HTTP:
+     * duas respostas 201 são compatíveis tanto com a reserva certa quanto com a perdida.
+     *
+     * <p>⛔ <b>Este teste achou um defeito de verdade ao ser escrito (2026-09-04).</b> A reserva usava
+     * "UPDATE primeiro, INSERT se casou zero linhas", que é correto sequencialmente e tem uma
+     * <b>janela</b> entre os dois comandos: com a peça ainda sem linha em {@code produto_estoque}, as
+     * duas OS faziam o UPDATE, as duas casavam zero, e as duas chegavam ao INSERT — a segunda violava
+     * {@code produto_estoque_uk} e o lojista via <i>"Registro em uso por outro cadastro — não pode ser
+     * excluído"</i> ao <b>abrir uma OS</b>. Hoje o INSERT tem {@code ON CONFLICT … DO UPDATE}, o que é
+     * seguro aqui porque este caminho só roda com delta positivo (ver o comentário do
+     * {@code aplicarReserva}).
+     */
+    @Test
+    void duasOrdensSimultaneasReservandoAMesmaPecaSomamAsDuasReservas() throws Exception {
+        prepararTenant("reserva-corrida");
+
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        var prontas = new java.util.concurrent.CountDownLatch(2);
+        var abertas = new java.util.concurrent.atomic.AtomicInteger();
+        var falhas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+        var respostas = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+
+        Runnable abrirOs = () -> {
+            try {
+                prontas.countDown();
+                largada.await();
+                var status = mvc.perform(post("/api/v1/ordens-servico")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(APPLICATION_JSON).content(corpoDaOs("1")))
+                        .andReturn().getResponse();
+                respostas.add(status.getStatus() + " " + status.getContentAsString());
+                if (status.getStatus() == 200 || status.getStatus() == 201) {
+                    abertas.incrementAndGet();
+                }
+            } catch (Exception e) {
+                falhas.add(e.toString());
+            }
+        };
+
+        Thread a = new Thread(abrirOs, "os-reserva-1");
+        Thread b = new Thread(abrirOs, "os-reserva-2");
+        a.start();
+        b.start();
+        prontas.await();
+        largada.countDown();
+        a.join();
+        b.join();
+
+        assertThat(falhas).as("nenhuma thread pode explodir por outro motivo").isEmpty();
+        assertThat(abertas.get()).as("as duas OS podem existir: " + respostas).isEqualTo(2);
+
+        // ⭐ A invariante: 1 + 1 = 2. Uma reserva perdida é peça que a segunda OS acha que tem.
+        assertThat(reservado(idVariacaoPeca))
+                .as("duas reservas de 1 peça têm de somar 2 — se der 1, uma sobrescreveu a outra")
+                .isEqualByComparingTo(new BigDecimal("2.000"));
+    }
+
 }
