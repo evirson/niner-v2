@@ -1,6 +1,6 @@
 # Scripts de auditoria
 
-Duas verificações que **nenhuma ferramenta do projeto faz** — nem o `tsc -b`, nem a suíte, nem o
+Quatro verificações que **nenhuma ferramenta do projeto faz** — nem o `tsc -b`, nem a suíte, nem o
 build. As duas nasceram da pendência **#68** (`docs/PENDENCIAS.md`), que declarava o limite da
 auditoria de 2026-08-29: *"Fechar isso pede um script comparando os dois lados, que não existe"*.
 
@@ -9,6 +9,8 @@ Rode da **raiz do repositório**:
 ```bash
 node scripts/auditoria/classes-css-orfas.js
 node scripts/auditoria/contrato-ts-java.js
+node scripts/auditoria/contagem-de-telas.js
+node scripts/auditoria/botoes-bloqueados-sem-mensagem.js
 ```
 
 ## `classes-css-orfas.js` — classe CSS que não existe
@@ -82,3 +84,34 @@ cabeçalho: existem dois `ResultadoEmissao` (NFC-e e NFS-e), e com 558 records o
 ⛔ **Não reprova build de propósito**, e declara os limites: não compara *tipo* de campo, não
 alcança DTO montado como `Map<String,Object>`, não pega campo que mudou de *significado*, e não
 resolve rota montada por concatenação. `--verboso` lista o que ficou sem resolver.
+
+## `botoes-bloqueados-sem-mensagem.js` (2026-09-04)
+
+Procura `disabled={!condicao}` cuja condição é **composta** sem que a tela mostre, junto do botão,
+**qual razão** está bloqueando. É família de defeito já paga várias vezes aqui: o "Confirmar
+Entrada" ficava cinza por **treze** motivos com mensagem para **dois**.
+
+⛔ **A razão mais opaca é sempre a PERMISSÃO.** Com o botão cinza, o operador confere o que
+preencheu — produto, quantidade, cliente — e nunca desconfia da grade de permissões, que ele nem
+sabe que existe. Por isso ela vem **primeiro** nas mensagens que o projeto adota.
+
+**Padrão de correção**, replicável em uma linha por tela:
+
+```ts
+const motivoBloqueio = razaoA ? 'texto' : razaoB ? 'texto' : … : null
+```
+
+renderizado ao lado do botão **e** passado no `title`.
+
+⚠️ **Ele foi reescrito no dia em que rendeu:** a versão de 31/08 acusou 14 e **8 eram falso
+positivo** — a mensagem existia numa forma que ele não reconhecia. Hoje aceita `title=` no próprio
+botão, carrega **exceções conferidas com o motivo escrito**, **avisa quando uma exceção fica órfã**
+(o botão mudou e a lista ia apodrecer — aconteceu com duas na mesma sessão) e **sai com código 1**,
+podendo entrar em CI.
+
+⛔ **E ele carrega uma lição sobre o próprio uso.** A rodada de 31/08 concluiu que *"a família não
+existe"* e fechou o assunto, citando duas telas como falso positivo. Em 09-04 a varredura **razão a
+razão** achou seis defeitos, **incluindo essas duas** — a análise antiga conferira **uma razão por
+tela**. Falso **negativo** custa mais que falso positivo: o primeiro faz perder tempo, o segundo faz
+a próxima pessoa **não olhar**. O script tinha ficado cinco dias em `/tmp/`, que nem sobrevive a um
+reboot; por isso hoje mora aqui.

@@ -111,3 +111,16 @@ informação do gráfico. O módulo virou `lib/paletaDeImpressaoParaCaptura.ts`.
 uma tabela só, e ela é o corpo do relatório. ⚠️ **Não teve PDF gerado na entrega de 09-04**:
 a mudança foi aplicada e verificada por script e por `tsc`, mas só Estoque e Lucratividade
 foram exercitados de ponta a ponta.
+
+---
+
+**Revisão 2026-09-04 — o botão principal passou a dizer POR QUE está cinza.**
+A varredura de `scripts/auditoria/botoes-bloqueados-sem-mensagem.js` (pendência 96) achou seis
+telas em que o botão bloqueava por várias razões e nenhuma aparecia. O padrão adotado é um
+`motivoBloqueio` com a cadeia de razões **na ordem em que a tela é preenchida**, renderizado ao
+lado do botão e passado no `title`.
+
+**Nesta tela:** o filtro era o **único dos cinco modais de filtro de relatório sem instrução** —
+os outros quatro já dizem o que falta logo abaixo do título. No modelo **Kardex** ele exige três
+coisas (período, produto e, para admin, empresa) e não dizia nenhuma. O motivo é calculado na tela
+(que conhece as regras de cada modelo) e passado ao modal.

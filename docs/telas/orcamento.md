@@ -536,3 +536,17 @@ busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-pa
 `docs/telas/cliente.md`; a implementação é `web/src/lib/useNavegacaoDeGrid.ts`.
 
 ✅ **Aberta e medida no navegador em 09-04.**
+
+---
+
+**Revisão 2026-09-04 — o botão principal passou a dizer POR QUE está cinza.**
+A varredura de `scripts/auditoria/botoes-bloqueados-sem-mensagem.js` (pendência 96) achou seis
+telas em que o botão bloqueava por várias razões e nenhuma aparecia. O padrão adotado é um
+`motivoBloqueio` com a cadeia de razões **na ordem em que a tela é preenchida**, renderizado ao
+lado do botão e passado no `title`.
+
+**Nesta tela:** das cinco razões do "Emitir Orçamento", só o **desconto acima do teto** se
+explicava (a mensagem em vermelho no fim do rodapé). Faltar cliente, vendedor, item ou validade
+deixava o botão morto em silêncio. ⭐ O desconto ficou **fora** da mensagem nova de propósito: ele
+já tem texto próprio dizendo o teto e onde configurá-lo, e repetir daria dois avisos para o mesmo
+erro.

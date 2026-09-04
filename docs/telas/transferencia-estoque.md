@@ -242,3 +242,16 @@ busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-pa
 aplicada por script e conferida (o import resolve, o spread caiu na `<tr>` da grid principal e não
 de um modal, não há `return` antecipado antes do hook) mais `tsc -b`, mas só sete das dezoito
 telas foram exercitadas de verdade.
+
+---
+
+**Revisão 2026-09-04 — o botão principal passou a dizer POR QUE está cinza.**
+A varredura de `scripts/auditoria/botoes-bloqueados-sem-mensagem.js` (pendência 96) achou seis
+telas em que o botão bloqueava por várias razões e nenhuma aparecia. O padrão adotado é um
+`motivoBloqueio` com a cadeia de razões **na ordem em que a tela é preenchida**, renderizado ao
+lado do botão e passado no `title`.
+
+**Nesta tela:** o "Confirmar Transferência" fica na **topbar**, visível de qualquer ponto — e a
+única explicação que existia ("Nenhum produto adicionado ainda") morava lá embaixo, na área da
+lista, cobrindo **uma** das três razões. Escolher o destino e zerar uma quantidade deixavam o botão
+morto sem diagnóstico. Hoje as três se explicam: *destino*, *sem produto* e *quantidade zerada*.

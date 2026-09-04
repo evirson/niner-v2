@@ -265,3 +265,18 @@ sempre: ele compôs o da nota de entrada).
 ⛔ **Declarado, e é o limite desta correção:** não existe caso ponta a ponta com desconto do
 fornecedor. O montador é o mesmo da devolução de venda e está coberto contra o **XSD oficial**, mas
 nenhum teste monta a NF-e de saída a partir de uma entrada com `vDesc`.
+
+---
+
+**Revisão 2026-09-04 — o botão principal passou a dizer POR QUE está cinza.**
+A varredura de `scripts/auditoria/botoes-bloqueados-sem-mensagem.js` (pendência 96) achou seis
+telas em que o botão bloqueava por várias razões e nenhuma aparecia. O padrão adotado é um
+`motivoBloqueio` com a cadeia de razões **na ordem em que a tela é preenchida**, renderizado ao
+lado do botão e passado no `title`.
+
+**Nesta tela:** o rodapé já mostrava a contagem e o "quantidade acima do máximo"; faltavam duas
+razões. ⛔ A mais cara é a **permissão** — o comentário do próprio `podeDevolver` explica que ela
+entrou no booleano para o operador não perder a seleção inteira até levar um 403, mas essa
+explicação nunca chegava à tela: ele via o botão morto depois de marcar item a item. Hoje o rodapé
+diz *"sem permissão para devolver — peça ao administrador"* e também avisa do item zerado, que some
+no meio de uma grade longa.

@@ -370,3 +370,32 @@ busca. O mecanismo é comum às 18 telas de lista e está descrito no arquivo-pa
 aplicada por script e conferida (o import resolve, o spread caiu na `<tr>` da grid principal e não
 de um modal, não há `return` antecipado antes do hook) mais `tsc -b`, mas só sete das dezoito
 telas foram exercitadas de verdade.
+
+---
+
+**Revisão 2026-09-04 — a reserva de estoque tinha uma JANELA de concorrência, e foi corrigida.**
+
+⛔ **O defeito, e como apareceu.** `aplicarReserva` usava o idioma *"UPDATE primeiro, INSERT se
+casou zero linhas"* — correto quando as chamadas não se cruzam, e com uma **janela** entre os dois
+comandos. Com a peça ainda **sem linha** em `produto_estoque` (o caso comum: peça que nunca teve
+movimento nesta empresa), duas OS abertas ao mesmo tempo faziam o UPDATE, as duas casavam zero, as
+duas chegavam ao INSERT — e a segunda violava `produto_estoque_uk`. O lojista via
+*"Registro em uso por outro cadastro — não pode ser excluído"* **ao abrir uma ordem de serviço**:
+a mensagem genérica do `GlobalExceptionHandler`, que fala de exclusão de cadastro e manda o
+diagnóstico para o lado errado.
+
+⭐ **Quem achou foi a corrida**, não a leitura: o teste
+`OrdemServicoTest.duasOrdensSimultaneasReservandoAMesmaPecaSomamAsDuasReservas` (pendência 95)
+falhou na primeira execução, e o motivo estava na resposta HTTP da segunda thread. Nenhum teste
+sequencial pegaria — o idioma é correto quando as chamadas não se sobrepõem.
+
+⭐ **A correção é `ON CONFLICT … DO UPDATE` no INSERT**, e ela **não contradiz** o comentário que
+proibia `ON CONFLICT` ali. O problema descrito naquele comentário é com **delta negativo**: o
+Postgres avalia os CHECK da tupla **proposta** antes de resolver o conflito, e liberar uma reserva
+levaria `reservado = -1`, estourando `produto_estoque_reservado_ck`. Este caminho só roda com
+`delta.signum() > 0` — a tupla proposta é sempre positiva. ⚠️ **Ler POR QUE a proibição existia foi
+o que mostrou que ela não se aplicava**; obedecê-la sem ler teria deixado o bug de pé.
+
+⚠️ A invariante afirmada é de **soma**, não de exclusão: as duas OS *devem* abrir, e a reserva tem
+de ficar em **2**. Se ficar em 1, uma sobrescreveu a outra e a segunda OS trabalha com peça que a
+primeira já contava como sua.

@@ -745,3 +745,17 @@ Emitir ali declararia à SEFAZ uma operação que foi desfeita.
 
 ✅ **Medido na tela:** a venda 648, que é **só de serviço**, oferece corretamente **NFS-e** — não
 NFC-e.
+
+---
+
+**Revisão 2026-09-04 — o aviso "item lançado" ficou legível.**
+
+O `.pdv-flash` (a pílula verde que confirma o lançamento de cada item) tinha texto `#08210f` sobre
+`--sucesso`: contraste **3.18**, abaixo do mínimo de 4.5. Passou a branco: **5.34**.
+
+⚠️ **Não era regressão da paleta azul** — media **3.16** antes dela, então era defeito antigo que só
+apareceu porque os 13 pares de contraste foram calculados ao trocar as cores. ⭐ E importa mais do
+que o número sugere: é o aviso que o operador lê **de relance, a metros do monitor, o dia inteiro**
+— é assim que ele sabe que a bipada entrou.
+
+⚠️ **Não conferido na tela** (pendência 92b): o aviso só aparece ao lançar um item no PDV.
