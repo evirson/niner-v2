@@ -142,6 +142,24 @@ export default function RegraFiscalModal({
     !cfopInterestadualIncompleto &&
     (f.modoIcms === 'CSOSN' ? !!f.csosn : !!f.cstIcms)
 
+  /**
+   * Por que "Salvar regra" está cinza (2026-09-04).
+   *
+   * ⚠️ As três razões são de domínio **fiscal**, não de formulário: quem monta uma regra aqui pode
+   * não saber que o CFOP tem exatamente 4 dígitos, nem que o campo de ICMS muda de nome conforme o
+   * regime (CSOSN no Simples, CST fora dele). Botão cinza sem texto vira "o sistema não deixa
+   * salvar" — e o operador mexe no que já estava certo.
+   */
+  const motivoBloqueio = f.cfop.trim().length !== 4
+    ? 'Informe o CFOP com 4 dígitos.'
+    : cfopInterestadualIncompleto
+      ? 'O CFOP interestadual precisa ter 4 dígitos (ou ficar em branco).'
+      : f.modoIcms === 'CSOSN' && !f.csosn
+        ? 'Escolha o CSOSN.'
+        : f.modoIcms !== 'CSOSN' && !f.cstIcms
+          ? 'Escolha o CST de ICMS.'
+          : null
+
   return (
     <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Regra do perfil fiscal" onClick={(e) => e.stopPropagation()}>
@@ -411,7 +429,16 @@ export default function RegraFiscalModal({
           <button type="button" className="btn ghost" onClick={aoFechar}>
             Cancelar
           </button>
-          <button type="button" className="btn" disabled={!valido} onClick={() => aoSalvar(paraRequisicao(f))}>
+          {motivoBloqueio && (
+            <span className="muted" style={{ fontSize: 12, marginRight: 'auto' }}>{motivoBloqueio}</span>
+          )}
+          <button
+            type="button"
+            className="btn"
+            disabled={!valido}
+            onClick={() => aoSalvar(paraRequisicao(f))}
+            title={motivoBloqueio ?? undefined}
+          >
             {regraInicial ? 'Salvar regra' : 'Adicionar regra'}
           </button>
         </div>

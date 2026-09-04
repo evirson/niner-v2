@@ -177,6 +177,36 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 > pixel a pixel. História completa em `docs/PROGRESSO.md` (2026-09-04); mecanismo em
 > `docs/telas/relatorio-vendas.md`.
 
+### ✅ 96. Botões desabilitados sem mensagem — **FECHADO em 2026-09-04**
+
+O script `botoes-bloqueados-sem-mensagem.js` acusava **14**. Conferidos um a um:
+
+**Seis eram defeito e foram corrigidos** — em todos, a razão passou a aparecer **junto do botão**,
+mais `title` no hover:
+
+| Tela | Razões que não se explicavam |
+|---|---|
+| **Transferência de Estoque** | destino, itens e quantidade zerada — o botão fica na **topbar** e a única mensagem morava na área da lista |
+| **Devolução de Produtos** | ⛔ **permissão**, itens, número da venda, quantidade inválida |
+| **Devolução ao Fornecedor** | ⛔ **permissão** e item zerado (as outras duas já apareciam no rodapé) |
+| **Orçamento** | cliente, vendedor, itens e validade (o desconto acima do teto já tinha mensagem própria) |
+| **Regra Fiscal** | CFOP de 4 dígitos, CFOP interestadual incompleto, CSOSN/CST — todas de domínio fiscal |
+| **Filtro do Kardex** | período, produto e empresa — era o **único** dos cinco modais de filtro sem instrução |
+
+⛔ **A razão mais opaca é sempre a PERMISSÃO.** Sem ela o botão fica cinza e o operador confere o
+que preencheu — produto, quantidade, cliente — antes de suspeitar da grade de permissões, que ele
+nem sabe que existe. Por isso ela vem **primeiro** nas mensagens novas.
+
+**Oito eram falso positivo** — a mensagem existia numa forma que o script não alcançava: `title` no
+próprio botão (Forma de Pagamento), instrução no topo do modal (os quatro filtros de relatório) ou
+texto logo acima do botão (Exportação de XML, duas vezes).
+
+⭐ **O script foi corrigido junto, e isso é o mais durável daqui.** Guarda que acusa falso treina
+quem lê a falha a ignorá-lo. Agora ele aceita `title=` no botão, carrega uma lista de **exceções
+conferidas com o motivo escrito**, avisa quando uma exceção fica **órfã** (o botão mudou e a lista
+ia apodrecer — aconteceu com duas na mesma sessão) e **sai com código 1** quando acha algo novo,
+podendo entrar em CI. Hoje: **0 novos**.
+
 ### ✅ 95. Concorrência real em TODAS as travas de dinheiro — **FECHADO em 2026-09-04**
 
 Eram três corridas (numeração fiscal, limite de crédito, sangria). Hoje entraram **sete**, cobrindo

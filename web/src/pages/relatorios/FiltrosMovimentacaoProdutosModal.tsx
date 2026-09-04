@@ -77,6 +77,7 @@ export default function FiltrosMovimentacaoProdutosModal({
   marcas,
   categorias,
   podeGerar,
+  motivoBloqueio,
   primeiraVez,
   aoGerar,
   aoFechar,
@@ -89,6 +90,8 @@ export default function FiltrosMovimentacaoProdutosModal({
   marcas: string[]
   categorias: CategoriaProduto[]
   podeGerar: boolean
+  /** Por que o "Gerar" está cinza — vem do pai, que é quem conhece as regras de cada modelo. */
+  motivoBloqueio: string | null
   primeiraVez: boolean
   aoGerar: () => void
   aoFechar: () => void
@@ -235,7 +238,20 @@ export default function FiltrosMovimentacaoProdutosModal({
         </div>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn" disabled={!podeGerar} onClick={aoGerar}>
+          {/* ⚠️ 2026-09-04: no modelo Kardex o botão bloqueia por TRÊS razões (período,
+              variação e, para admin, empresa) e nenhuma aparecia — era o único dos cinco
+              modais de filtro de relatório sem instrução; os outros quatro já dizem o que
+              falta logo abaixo do título. */}
+          {motivoBloqueio && (
+            <span className="muted" style={{ fontSize: 12 }}>{motivoBloqueio}</span>
+          )}
+          <button
+            type="button"
+            className="btn"
+            disabled={!podeGerar}
+            onClick={aoGerar}
+            title={motivoBloqueio ?? undefined}
+          >
             Gerar Relatório
           </button>
         </div>

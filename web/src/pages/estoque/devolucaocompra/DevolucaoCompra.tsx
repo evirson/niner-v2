@@ -423,8 +423,23 @@ export default function DevolucaoCompra() {
               {selecionados.length} produto{selecionados.length === 1 ? '' : 's'} · Total R${' '}
               {formatarMoeda(totalDevolucao)}
               {excedeu.length > 0 && ' · quantidade acima do máximo'}
+              {/* ⚠️ 2026-09-04: as outras duas razões do `podeDevolver` não apareciam em lugar
+                  nenhum. A de PERMISSÃO é a que mais custa aqui — o comentário do próprio
+                  `podeDevolver` explica que ela entrou no booleano para o operador não perder a
+                  seleção inteira até levar 403, mas ele continuava sem saber POR QUE o botão
+                  estava morto. E `zerados` some no meio de uma grade longa. */}
+              {!acoes.incluir && ' · sem permissão para devolver — peça ao administrador'}
+              {acoes.incluir && zerados.length > 0 && ' · há item com quantidade zerada'}
+              {acoes.incluir && zerados.length === 0 && excedeu.length === 0 && selecionados.length === 0
+                && ' · marque ao menos um produto'}
             </span>
-            <button type="button" className="btn" disabled={!podeDevolver} onClick={() => setConfirmando(true)}>
+            <button
+              type="button"
+              className="btn"
+              disabled={!podeDevolver}
+              onClick={() => setConfirmando(true)}
+              title={!acoes.incluir ? 'Você não tem permissão para devolver ao fornecedor.' : undefined}
+            >
               Devolver ao fornecedor
             </button>
           </div>

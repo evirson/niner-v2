@@ -119,6 +119,25 @@ export default function OrcamentoForm() {
     cliente != null && vendedor != null && itens.length > 0 &&
     dataValida(validadeTexto) && !descontoAcimaDoTeto
 
+  /**
+   * Por que o "Emitir Orçamento" está cinza (2026-09-04).
+   *
+   * ⚠️ Das cinco razões, só o desconto acima do teto se explicava (a mensagem em vermelho no fim
+   * do rodapé). Faltar cliente, vendedor, item ou validade deixava o botão morto **em silêncio**.
+   *
+   * ⭐ O desconto fica de fora desta lista de propósito: ele já tem mensagem própria, em vermelho,
+   * dizendo o teto e onde ele é configurado — repetir aqui daria dois avisos para o mesmo erro.
+   */
+  const motivoBloqueio = cliente == null
+    ? 'Escolha o cliente.'
+    : vendedor == null
+      ? 'Escolha o vendedor.'
+      : itens.length === 0
+        ? 'Adicione ao menos um produto.'
+        : !dataValida(validadeTexto)
+          ? 'Informe uma data de validade válida (dd/mm/aaaa).'
+          : null
+
   const acrescentarItem = (p: {
     idVariacao: number
     sku: string
@@ -319,9 +338,18 @@ export default function OrcamentoForm() {
           <section className="section">
             <div className="orcamento-rodape">
               <div className="orcamento-rodape-acao">
-                <button type="button" className="btn" disabled={!podeEmitir || emitir.isPending} onClick={() => emitir.mutate()}>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!podeEmitir || emitir.isPending}
+                  onClick={() => emitir.mutate()}
+                  title={motivoBloqueio ?? undefined}
+                >
                   {emitir.isPending ? 'Emitindo…' : 'Emitir Orçamento'}
                 </button>
+                {motivoBloqueio && (
+                  <p className="muted" style={{ margin: 0, fontSize: 12 }}>{motivoBloqueio}</p>
+                )}
                 {/* O aviso da imutabilidade fica sob o botão: ocupa altura que a coluna dos
                     totais já usa de qualquer forma, então não custa linha nova. */}
                 <p className="muted" style={{ margin: 0, fontSize: 12 }}>

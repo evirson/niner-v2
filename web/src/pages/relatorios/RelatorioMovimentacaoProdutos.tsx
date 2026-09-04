@@ -178,6 +178,21 @@ export default function RelatorioMovimentacaoProdutos() {
       ? periodoPreenchido && !!rascunho.variacaoKardex && (!ehAdmin || !!rascunho.idEmpresaKardex)
       : periodoPreenchido
 
+  /**
+   * Por que o "Gerar Relatório" está cinza (2026-09-04).
+   *
+   * ⚠️ O Kardex exige três coisas e o modal não dizia nenhuma. A ordem aqui segue a de
+   * preenchimento na tela: primeiro o período (que os dois modelos exigem), depois o que só o
+   * Kardex pede.
+   */
+  const motivoBloqueio = !periodoPreenchido
+    ? 'Informe o período (data inicial e final).'
+    : rascunho.modelo === 'KARDEX' && !rascunho.variacaoKardex
+      ? 'Escolha o produto do Kardex.'
+      : rascunho.modelo === 'KARDEX' && ehAdmin && !rascunho.idEmpresaKardex
+        ? 'Escolha a empresa do Kardex.'
+        : null
+
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['relatorio-movimentacao-produtos', filtros],
     queryFn: () => gerarRelatorioMovimentacaoProdutos(filtros),
@@ -593,6 +608,7 @@ export default function RelatorioMovimentacaoProdutos() {
           marcas={marcas ?? []}
           categorias={categorias ?? []}
           podeGerar={podeGerarRascunho}
+          motivoBloqueio={motivoBloqueio}
           primeiraVez={!relatorioGerado}
           aoGerar={handleGerar}
           aoFechar={relatorioGerado ? fecharModal : () => navigate(-1)}

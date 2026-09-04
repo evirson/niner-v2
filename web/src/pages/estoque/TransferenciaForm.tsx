@@ -169,6 +169,23 @@ export default function TransferenciaForm() {
   // informada precisa ser maior que zero, não há mais bloqueio contra o saldo da origem.
   const algumItemZerado = itens.some((i) => desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) <= 0)
   const podeConfirmar = idEmpresaDestino !== '' && itens.length > 0 && !algumItemZerado
+
+  /**
+   * Por que o "Confirmar Transferência" está cinza (2026-09-04).
+   *
+   * ⚠️ O botão mora na **topbar**, visível de qualquer ponto da tela; a única explicação que
+   * existia ("Nenhum produto adicionado ainda") mora lá embaixo, na área da lista, e cobria só uma
+   * das três razões. Escolher o destino e zerar uma quantidade deixavam o botão morto **sem
+   * diagnóstico nenhum**. Guarda que bloqueia e mensagem que a explica têm de ficar sob a mesma
+   * condição, e ao alcance do olho de quem vai clicar.
+   */
+  const motivoBloqueio = idEmpresaDestino === ''
+    ? 'Escolha a empresa de destino.'
+    : itens.length === 0
+      ? 'Adicione ao menos um produto.'
+      : algumItemZerado
+        ? 'Há produto com quantidade zerada — informe a quantidade ou remova a linha.'
+        : null
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
   const valorTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * i.precoVenda, 0)
 
@@ -193,11 +210,17 @@ export default function TransferenciaForm() {
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela={CHAVE_TELA} />
             <BotaoFecharTela />
+            {motivoBloqueio && (
+              <span className="muted" style={{ fontSize: 12, maxWidth: 260, textAlign: 'right' }}>
+                {motivoBloqueio}
+              </span>
+            )}
             <button
               type="button"
               className="btn"
               disabled={!podeConfirmar || criar.isPending}
               onClick={() => criar.mutate()}
+              title={motivoBloqueio ?? undefined}
             >
               {criar.isPending ? 'Transferindo…' : 'Confirmar Transferência'}
             </button>

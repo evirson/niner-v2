@@ -360,6 +360,25 @@ export default function DevolucaoProduto() {
   const algumItemComErro = itens.some((i) => erroDoItem(i, desmascararQuantidade(i.qtdTexto, permiteQtdDecimal)) !== null)
   const faltaNumeroVendaObrigatorio = exigeNumeroVenda && !numeroVendaTexto.trim()
   const podeConfirmar = itens.length > 0 && !algumItemComErro && !faltaNumeroVendaObrigatorio
+
+  /**
+   * Por que o "Gravar Devolução" está cinza (2026-09-04).
+   *
+   * ⚠️ O botão mora na **topbar**, visível de qualquer ponto da tela, e bloqueava por quatro razões
+   * sem dizer nenhuma. ⛔ A pior é a **permissão**: sem `incluir`, o operador vê um botão morto e
+   * não tem como descobrir que o problema não está no que ele preencheu — vai conferir a venda, a
+   * quantidade e o produto antes de pensar em permissão. Ela vem primeiro na ordem justamente
+   * porque é a que ele nunca adivinharia.
+   */
+  const motivoBloqueio = !acoes.incluir
+    ? 'Você não tem permissão para gravar devolução — peça ao administrador.'
+    : itens.length === 0
+      ? 'Adicione ao menos um produto à devolução.'
+      : faltaNumeroVendaObrigatorio
+        ? 'Informe o número da venda de origem.'
+        : algumItemComErro
+          ? 'Há item com quantidade inválida — confira as linhas em vermelho.'
+          : null
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
   /**
    * ⚠️ Desconto da linha **arredondado UMA vez**, exatamente como a efetivação grava
@@ -397,11 +416,17 @@ export default function DevolucaoProduto() {
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela={CHAVE_TELA} />
             <BotaoFecharTela />
+            {motivoBloqueio && (
+              <span className="muted" style={{ fontSize: 12, maxWidth: 280, textAlign: 'right' }}>
+                {motivoBloqueio}
+              </span>
+            )}
             <button
               type="button"
               className="btn"
               disabled={!podeConfirmar || efetivar.isPending || !acoes.incluir}
               onClick={() => efetivar.mutate()}
+              title={motivoBloqueio ?? undefined}
             >
               {efetivar.isPending ? 'Gravando…' : 'Gravar Devolução'}
             </button>

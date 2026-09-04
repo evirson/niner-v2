@@ -73,6 +73,17 @@ export default function FornecedorQuickCreateModal({
 
   const valido = form.razaoSocial.trim() && form.idPlanoContas.trim()
 
+  /**
+   * Por que "Criar" está cinza (2026-09-04). São só dois campos, mas um deles é o **plano de
+   * contas** — que num cadastro rápido, no meio de uma entrada de mercadoria, não é o que o
+   * operador espera ter de preencher para criar um fornecedor. Dizer qual falta custa uma linha.
+   */
+  const motivoBloqueio = !form.razaoSocial.trim()
+    ? 'Informe a razão social.'
+    : !form.idPlanoContas.trim()
+      ? 'Escolha o plano de contas.'
+      : null
+
   return (
     <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Novo fornecedor" onClick={(e) => e.stopPropagation()}>
@@ -167,7 +178,16 @@ export default function FornecedorQuickCreateModal({
           <button type="button" className="btn ghost" onClick={aoFechar}>
             Cancelar
           </button>
-          <button type="button" className="btn" disabled={!valido || criar.isPending} onClick={() => criar.mutate()}>
+          {motivoBloqueio && (
+            <span className="muted" style={{ fontSize: 12, marginRight: 'auto' }}>{motivoBloqueio}</span>
+          )}
+          <button
+            type="button"
+            className="btn"
+            disabled={!valido || criar.isPending}
+            onClick={() => criar.mutate()}
+            title={motivoBloqueio ?? undefined}
+          >
             {criar.isPending ? 'Criando…' : 'Criar'}
           </button>
         </div>
