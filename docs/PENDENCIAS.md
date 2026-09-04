@@ -170,6 +170,67 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 
 ---
 
+## ⏭️ PARA RETOMAR EM 2026-09-05 — o que é minha bola
+
+> Fim de **2026-09-04**: 6 commits, **1214 testes verdes**, `tsc -b` limpo, os 4 scripts de
+> auditoria em exit 0, árvore limpa, **nada pushado depois do `2a0d4cd`**.
+>
+> Fecharam hoje: **88** (9 PDFs medidos), **89** (a guarda `fimCorpoPx`), **92** (`.pdv-flash`),
+> **95** (concorrência — 7 rotinas) e **96** (botões sem mensagem). Mais a paleta azul, o
+> `darkreader-lock`, o PDF preto-no-branco, o cabeçalho de coluna repetido e a grid navegável.
+
+### 🟢 1º — `AjudaDaTela.tsx`: 80 entradas, 1.539 linhas que AFIRMAM comportamento
+
+É o maior volume de afirmação não verificada do repositório, e é **conteúdo que o lojista lê**: se a
+ajuda descreve o que o sistema não faz, ele age errado achando que está certo.
+
+⚠️ **Já pegamos dois casos por acaso, sem procurar:** a frase *"o PDF sai em tema claro"* (que a
+paleta azul tornou enganosa) e a ajuda da Conta Corrente que listava 2 dos 7 filtros da tela.
+
+**Como atacar:** por tela, comparando cada afirmação com o código — atalhos de teclado citados,
+regras de bloqueio, o que cada botão faz, campos que a tela realmente tem. ⭐ Priorizar as telas de
+**dinheiro e fiscal**, onde agir errado custa caro.
+
+### 🟢 2º — `configuracao/importacao/`: 17 arquivos, 2.736 linhas que ninguém leu
+
+Nenhuma das dez varreduras de 29/08 passou por aqui. E importação **escreve dados em massa**: um
+defeito ali entra no banco do lojista de uma vez só, no dia da migração — quando ele ainda não tem
+histórico para desconfiar do número.
+
+⚠️ Há precedente concreto: o `ContasReceberImportador` e o importador de Produto já tiveram
+**defeito de fuso** (a data da planilha convertida com o `TZ` do container, que só existe em
+produção), pego pelo guarda de fuso em 29/08. O resto do pacote continua sem leitura.
+
+### 🟢 3º — 118 `className` montados por interpolação
+
+`className={\`uso-${x}\`}` escapa do `classes-css-orfas.js` por construção. Classe inexistente **não
+dá erro em lugar nenhum** — passa no `tsc`, na suíte e no build; o elemento só perde o estilo. Já
+custou três defeitos visuais num único dia (Sangria, Contas a Pagar e Minha Conta, em 29/08).
+
+**Como atacar:** enumerar os valores possíveis de cada interpolação e conferir se cada classe
+resultante existe. Não dá para automatizar por completo — dá para reduzir a lista.
+
+### 🟢 4º — `#54`: executor por linha na OS
+
+A parte técnica é minha: hoje o mapa fica com o **primeiro** executor quando a mesma variação se
+repete na OS. Resolver exige a chave de linha que o PDV ainda não carrega para a OS. ⛔ A **agenda /
+hora marcada** do mesmo item é decisão sua e continua parada.
+
+### 🟡 Bloqueadas por FALTA DE DADO (fecham sozinhas no uso real)
+
+- **93** — 6 das 18 grids sem linhas no ambiente: Conta Corrente e seu Movimento, Contas a Pagar,
+  Entrada de Mercadoria, Transferências, Cancelamento de Devolução.
+- **88b** — Contas a Pagar e Diferenças de Estoque sem PDF gerado (esta depende de um balanço).
+- **89b** — o caso "tabela curta em relatório longo" nunca apareceu num PDF real.
+- **92b** — o `.pdv-flash` corrigido não foi visto na tela (só aparece ao lançar item no PDV).
+
+### ⛔ Fora do meu alcance — não é "não fiz"
+
+Impressão em papel (etiqueta, papeleta, DANFE), resposta da SEFAZ, correção criptográfica e
+conformidade de XSD executadas de verdade. Dependem de você, de hardware ou de transmitir.
+
+---
+
 ## 🎨 Aberto em 2026-09-04 — o que a sessão de interface deixou por medir
 
 > Sessão de **interface apenas**: nenhuma migration, nenhuma mudança de backend, a suíte Java não
@@ -801,6 +862,27 @@ mas em lugar nenhum que o usuário esteja olhando".
 > ⭐ **A família não existe.** O defeito era específico de uma tela com treze condições; fica
 > **fechada** em vez de aberta. O script está em `/tmp/botoes.js` e vale re-rodar quando uma tela
 > nova acumular condições.
+
+> ## ⛔ CORREÇÃO em 2026-09-04 — a conclusão acima foi CEDO DEMAIS
+>
+> A varredura completa (pendência **96**) achou **seis** defeitos, e **dois deles são exatamente as
+> telas que o texto acima descartou como falso positivo**: `DevolucaoProduto` e
+> `TransferenciaForm`.
+>
+> **Os dois lados estavam parcialmente certos, e o erro é de método.** A análise de 31/08 conferiu
+> **uma razão por tela** — o erro de quantidade, que de fato aparece na linha da grade — e concluiu
+> dali que a tela estava coberta. O que ela não olhou foram as **outras** razões da mesma condição:
+> destino não escolhido, **permissão**, número da venda obrigatório. Uma condição composta precisa
+> ser conferida **razão a razão**, não por amostra.
+>
+> ⚠️ **E o custo desse tipo de conclusão é alto:** "a família não existe / fica fechada" faz a
+> próxima pessoa **não olhar**. Foi o que aconteceu — o script existia desde 31/08, estava em
+> `/tmp/botoes.js` (que nem sobrevive a um reboot) e ninguém o rodou de novo até 09-04. Hoje ele
+> mora em `scripts/auditoria/`, com exceções nomeadas e saída com código 1.
+>
+> ⭐ **A lição, que vale além deste item:** descartar uma família de defeito exige a mesma disciplina
+> de provar que ela existe. "Conferi e não achou" só vale se o que foi conferido cobre o que a
+> hipótese afirma.
 
 ---
 
